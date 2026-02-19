@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Beleza Express PWA",
+  "description": "A comprehensive service delivery platform featuring specialized dashboards for platform administrators, partner companies, and end-customers.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
