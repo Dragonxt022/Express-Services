@@ -108,8 +108,11 @@ export interface Appointment {
   clientName: string;
   clientPhone?: string;
   companyName: string;
-  serviceName: string;
-  professionalName?: string; // Novo campo
+  serviceName: string; // Summary of services
+  services?: Service[]; // Multiple services
+  serviceLocation?: 'presencial' | 'domicilio';
+  addressId?: string; // For at-home service
+  professionalName?: string;
   date: string;
   time: string;
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled';

@@ -241,7 +241,7 @@ const Schedule: React.FC = () => {
 
                 <div className="flex-1 min-h-[80px]">
                    {apt ? (
-                     <div className={`p-6 rounded-[2.5rem] border shadow-sm transition-all relative overflow-hidden group/card ${
+                     <div className={`p-4 rounded-3xl border shadow-sm transition-all relative overflow-hidden group/card ${
                        apt.type === 'block' ? 'bg-slate-100 border-slate-200 opacity-80' :
                        apt.isOffline ? 'bg-slate-800 border-slate-900 text-white' :
                        apt.status === 'completed' ? 'bg-emerald-50 border-emerald-100' : 
@@ -253,26 +253,26 @@ const Schedule: React.FC = () => {
                           apt.status === 'completed' ? 'bg-emerald-600' : 'bg-pink-600'
                         }`}></div>
 
-                        <div className="flex justify-between items-start mb-4">
+                        <div className="flex justify-between items-start mb-3">
                           <div>
-                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${apt.isOffline ? 'text-pink-400' : 'text-pink-600'}`}>
+                            <p className={`text-[9px] font-black uppercase tracking-[0.2em] mb-1 ${apt.isOffline ? 'text-pink-400' : 'text-pink-600'}`}>
                               {apt.type === 'block' ? 'INDISPONÍVEL' : apt.serviceName}
                             </p>
-                            <h4 className={`text-xl font-black leading-none ${apt.isOffline ? 'text-white' : 'text-gray-900'}`}>{apt.clientName}</h4>
+                            <h4 className={`text-lg font-black leading-none ${apt.isOffline ? 'text-white' : 'text-gray-900'}`}>{apt.clientName}</h4>
                           </div>
                           
                           <div className="flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
                              {apt.type !== 'block' && (
                                <button 
                                 onClick={() => setReschedulingApt(apt)}
-                                className={`p-3 rounded-2xl shadow-lg transition-all ${
+                                className={`p-2.5 rounded-xl shadow-lg transition-all ${
                                   apt.isOffline 
                                     ? 'bg-white/10 text-white hover:bg-white/20' 
                                     : 'bg-pink-100 text-pink-700 hover:bg-pink-200'
                                 }`}
                                 title="Remarcar"
                                >
-                                 <RefreshCw size={16} />
+                                 <RefreshCw size={14} />
                                </button>
                              )}
                              <button 
@@ -281,14 +281,14 @@ const Schedule: React.FC = () => {
                                 saveAppointments(list);
                                 showFeedback('info', 'Agendamento removido');
                               }}
-                              className={`p-3 rounded-2xl transition-all ${
+                              className={`p-2.5 rounded-xl transition-all ${
                                 apt.isOffline
                                   ? 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
                                   : 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white'
                               }`}
                               title="Remover"
                              >
-                               <X size={16} />
+                               <X size={14} />
                              </button>
                           </div>
                         </div>
@@ -336,38 +336,38 @@ const Schedule: React.FC = () => {
       {/* Bottom Sheet de Opções de Bloqueio (Manual Slot) */}
       {manualSlot && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-           <div className="w-full bg-white rounded-t-[3rem] p-8 animate-in slide-in-from-bottom-full duration-500 shadow-2xl">
-              <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8"></div>
+           <div className="w-full bg-white rounded-t-3xl p-6 animate-in slide-in-from-bottom-full duration-500 shadow-2xl">
+              <div className="w-10 h-1 bg-gray-100 rounded-full mx-auto mb-6"></div>
               
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Ocupar Horário - {manualSlot.time}</h3>
-                <p className="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Escolha o tipo de reserva</p>
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">Ocupar Horário - {manualSlot.time}</h3>
+                <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-1.5">Escolha o tipo de reserva</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                  <button 
                   onClick={() => createManualApt('service', prompt('Nome do Cliente:') || undefined)}
-                  className="flex flex-col items-center gap-4 p-8 bg-slate-900 text-white rounded-[2.5rem] shadow-xl active:scale-95 transition-all"
+                  className="flex flex-col items-center gap-3 p-6 bg-slate-900 text-white rounded-3xl shadow-xl active:scale-95 transition-all"
                  >
-                    <div className="w-14 h-14 bg-pink-600 rounded-2xl flex items-center justify-center shadow-lg">
-                       <UserPlus size={28} />
+                    <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                       <UserPlus size={24} />
                     </div>
                     <div className="text-center">
-                      <span className="block font-black text-lg">Agendamento Manual</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente off-line / WhatsApp</span>
+                      <span className="block font-black text-base">Agendamento Manual</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">WhatsApp / Off-line</span>
                     </div>
                  </button>
 
                  <button 
                   onClick={() => createManualApt('block')}
-                  className="flex flex-col items-center gap-4 p-8 bg-gray-50 text-gray-400 rounded-[2.5rem] border border-gray-100 active:scale-95 transition-all"
+                  className="flex flex-col items-center gap-3 p-6 bg-gray-50 text-gray-400 rounded-3xl border border-gray-100 active:scale-95 transition-all"
                  >
-                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
-                       <Ban size={28} />
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
+                       <Ban size={24} />
                     </div>
                     <div className="text-center">
-                      <span className="block font-black text-lg text-gray-800">Bloquear Horário</span>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Almoço / Folga / Curso</span>
+                      <span className="block font-black text-base text-gray-800">Bloquear Horário</span>
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Almoço / Folga</span>
                     </div>
                  </button>
               </div>

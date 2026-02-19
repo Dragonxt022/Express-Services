@@ -3,14 +3,17 @@ import React, { useState } from 'react';
 import { 
   ArrowLeft, Star, MapPin, Clock, Phone, 
   Share2, Heart, ShieldCheck, ChevronRight, 
-  Scissors, Sparkles, User, Info 
+  Scissors, Sparkles, User, Info, Plus, Minus, ShoppingBag
 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
+import { Service } from '../../types';
 
 interface CompanyDetailsProps {
   companyId: string;
   onBack: () => void;
-  onBookService: (service: any) => void;
+  cartServices: Service[];
+  onUpdateCart: (services: Service[]) => void;
+  onProceedToBooking: () => void;
 }
 
 const mockServices = [
@@ -24,10 +27,27 @@ const mockReviews = [
   { id: 2, user: 'João P.', rating: 4, comment: 'Lugar muito bonito e limpo. Recomendo.', date: 'Há 1 semana' },
 ];
 
-const CompanyDetails: React.FC<CompanyDetailsProps> = ({ companyId, onBack, onBookService }) => {
+const CompanyDetails: React.FC<CompanyDetailsProps> = ({ 
+  companyId, 
+  onBack, 
+  cartServices, 
+  onUpdateCart, 
+  onProceedToBooking 
+}) => {
   const { showFeedback } = useFeedback();
   const [activeTab, setActiveTab] = useState<'services' | 'reviews' | 'about'>('services');
   const [isFavorite, setIsFavorite] = useState(false);
+
+  const toggleServiceInCart = (service: any) => {
+    const isSelected = cartServices.find(s => s.id === service.id);
+    if (isSelected) {
+      onUpdateCart(cartServices.filter(s => s.id !== service.id));
+    } else {
+      onUpdateCart([...cartServices, { ...service, companyId }]);
+    }
+  };
+
+  const cartTotal = cartServices.reduce((acc, s) => acc + s.price, 0);
 
   const handleShare = async () => {
     const shareData = {
@@ -150,30 +170,33 @@ const CompanyDetails: React.FC<CompanyDetailsProps> = ({ companyId, onBack, onBo
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {mockServices.map((service) => (
-                <div key={service.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center justify-between group hover:shadow-xl transition-all">
-                  <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-[#E11D48] group-hover:scale-110 transition-transform">
-                      <service.icon size={24} />
-                    </div>
-                    <div>
-                      <h4 className="font-black text-gray-900 leading-none mb-1">{service.name}</h4>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black text-gray-400 uppercase">{service.duration}</span>
-                        <div className="w-1 h-1 bg-gray-200 rounded-full"></div>
-                        <span className="text-[10px] font-black text-[#E11D48] uppercase">R$ {service.price.toFixed(2)}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {mockServices.map((service) => {
+                const isSelected = cartServices.find(s => s.id === service.id);
+                return (
+                  <div key={service.id} className={`bg-white p-4 rounded-3xl border transition-all flex items-center justify-between group hover:shadow-lg ${isSelected ? 'border-[#E11D48] shadow-md' : 'border-gray-100 shadow-sm'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${isSelected ? 'bg-rose-100 text-[#E11D48]' : 'bg-rose-50 text-[#E11D48]'}`}>
+                        <service.icon size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 leading-tight mb-0.5 text-sm">{service.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase">{service.duration}</span>
+                          <div className="w-1 h-1 bg-gray-200 rounded-full"></div>
+                          <span className="text-[9px] font-bold text-[#E11D48] uppercase">R$ {service.price.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
+                    <button 
+                      onClick={() => toggleServiceInCart(service)}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95 ${isSelected ? 'bg-[#E11D48] text-white' : 'bg-slate-900 text-white hover:bg-[#E11D48]'}`}
+                    >
+                      {isSelected ? <Minus size={18} /> : <Plus size={18} />}
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => onBookService(service)}
-                    className="w-10 h-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-[#E11D48] transition-all shadow-lg active:scale-95"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -254,6 +277,29 @@ const CompanyDetails: React.FC<CompanyDetailsProps> = ({ companyId, onBack, onBo
           </div>
         )}
       </div>
+
+      {/* Cart Summary Floating */}
+      {cartServices.length > 0 && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-10 duration-500">
+          <div className="bg-slate-900 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3 border border-white/10">
+            <div className="flex items-center gap-3 pl-1">
+              <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-rose-500/20">
+                <ShoppingBag size={20} />
+              </div>
+              <div>
+                <p className="text-[8px] font-bold text-rose-400 uppercase tracking-widest leading-none mb-0.5">{cartServices.length} {cartServices.length === 1 ? 'Serviço' : 'Serviços'}</p>
+                <p className="text-lg font-black text-white leading-none">R$ {cartTotal.toFixed(2)}</p>
+              </div>
+            </div>
+            <button 
+              onClick={onProceedToBooking}
+              className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all active:scale-95 flex items-center gap-2"
+            >
+              Agendar <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

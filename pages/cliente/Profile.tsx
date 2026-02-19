@@ -1,12 +1,15 @@
 
 import React, { useState } from 'react';
-import { User, Mail, Phone, Shield, Bell, ChevronRight, LogOut, Camera, Star, Award, Gift, Trophy, Zap, Target, MapPin, CreditCard, Plus, Check } from 'lucide-react';
+import { User, Mail, Phone, Shield, Bell, ChevronRight, LogOut, Camera, Star, Award, Gift, Trophy, Zap, Target, MapPin, CreditCard, Plus, Check, Trash2 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { Address, PaymentCard } from '../../types';
+import AddressForm from './AddressForm';
 
 const ClienteProfile: React.FC = () => {
   const { showFeedback } = useFeedback();
   const [activeTab, setActiveTab] = useState<'profile' | 'addresses' | 'payments'>('profile');
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
   
   const [formData, setFormData] = useState({
     name: 'Gabriel Oliveira',
@@ -28,6 +31,24 @@ const ClienteProfile: React.FC = () => {
   const nextLevelXp = 5000;
   const progress = (xp / nextLevelXp) * 100;
 
+  const handleSaveAddress = (newAddr: Partial<Address>) => {
+    if (editingAddress) {
+      setAddresses(addresses.map(a => a.id === editingAddress.id ? { ...a, ...newAddr } : a));
+      showFeedback('success', 'Endereço atualizado!');
+    } else {
+      setAddresses([...addresses, newAddr as Address]);
+      showFeedback('success', 'Endereço adicionado!');
+    }
+    setEditingAddress(null);
+    setIsAddingAddress(false);
+  };
+
+  const handleDeleteAddress = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAddresses(addresses.filter(a => a.id !== id));
+    showFeedback('info', 'Endereço removido');
+  };
+
   const handleUpdate = () => {
     showFeedback('success', 'Perfil atualizado com sucesso!');
   };
@@ -43,6 +64,19 @@ const ClienteProfile: React.FC = () => {
       </div>
     </div>
   );
+
+  if (isAddingAddress || editingAddress) {
+    return (
+      <AddressForm 
+        onBack={() => {
+          setIsAddingAddress(false);
+          setEditingAddress(null);
+        }}
+        onSave={handleSaveAddress}
+        initialData={editingAddress || undefined}
+      />
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-24 animate-in slide-in-from-bottom-8 duration-500">
@@ -168,10 +202,19 @@ const ClienteProfile: React.FC = () => {
         <div className="space-y-4 animate-in fade-in slide-in-from-right-8 duration-500">
           <div className="flex justify-between items-center px-4 mb-2">
              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Meus Locais Salvos</h3>
-             <button className="flex items-center gap-2 text-[#E11D48] font-black text-[10px] uppercase tracking-widest"><Plus size={14} /> Adicionar</button>
+             <button 
+              onClick={() => setIsAddingAddress(true)}
+              className="flex items-center gap-2 text-[#E11D48] font-black text-[10px] uppercase tracking-widest"
+             >
+               <Plus size={14} /> Adicionar
+             </button>
           </div>
           {addresses.map(addr => (
-            <div key={addr.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-pink-200 transition-all">
+            <div 
+              key={addr.id} 
+              onClick={() => setEditingAddress(addr)}
+              className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-pink-200 transition-all cursor-pointer"
+            >
                <div className="flex items-center gap-4">
                   <div className={`p-4 rounded-2xl ${addr.isDefault ? 'bg-pink-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
                     <MapPin size={24} />
@@ -184,7 +227,15 @@ const ClienteProfile: React.FC = () => {
                     <p className="text-xs font-medium text-gray-400 mt-1">{addr.street}, {addr.number} • {addr.city}</p>
                   </div>
                </div>
-               <ChevronRight size={20} className="text-gray-200 group-hover:text-pink-600 transition-colors" />
+               <div className="flex items-center gap-2">
+                 <button 
+                  onClick={(e) => handleDeleteAddress(addr.id, e)}
+                  className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                 >
+                   <Trash2 size={18} />
+                 </button>
+                 <ChevronRight size={20} className="text-gray-200 group-hover:text-pink-600 transition-colors" />
+               </div>
             </div>
           ))}
         </div>

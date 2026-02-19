@@ -57,16 +57,16 @@ const ExploreResults: React.FC<ExploreResultsProps> = ({ category, onBack, onSel
       </div>
 
       {/* Results List */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {mockResults.map((item) => (
           <div 
             key={item.id} 
             onClick={() => onSelectCompany(item.id)}
-            className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center gap-5 group hover:shadow-xl hover:border-rose-100 transition-all cursor-pointer"
+            className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:shadow-lg hover:border-rose-100 transition-all cursor-pointer"
           >
             <div className="relative">
-              <img src={item.logo} className="w-20 h-20 rounded-3xl object-cover shadow-sm group-hover:scale-105 transition-transform" alt="" />
-              <div className={`absolute -top-2 -right-2 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest shadow-sm border ${
+              <img src={item.logo} className="w-16 h-16 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" alt="" />
+              <div className={`absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest shadow-sm border ${
                 item.status === 'open' ? 'bg-green-500 text-white border-green-400' : 'bg-gray-400 text-white border-gray-300'
               }`}>
                 {item.status === 'open' ? 'Aberto' : 'Fechado'}
@@ -74,33 +74,33 @@ const ExploreResults: React.FC<ExploreResultsProps> = ({ category, onBack, onSel
             </div>
 
             <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="font-black text-gray-900 text-lg leading-none tracking-tight group-hover:text-[#E11D48] transition-colors">{item.name}</h4>
-                <span className="text-[10px] font-black text-gray-300">{item.priceRange}</span>
+              <div className="flex items-center justify-between mb-0.5">
+                <h4 className="font-black text-gray-900 text-base leading-none tracking-tight group-hover:text-[#E11D48] transition-colors">{item.name}</h4>
+                <span className="text-[9px] font-black text-gray-300">{item.priceRange}</span>
               </div>
               
-              <div className="flex items-center gap-4 mt-2">
-                <div className="flex items-center gap-1 text-amber-500 font-black text-xs">
-                  <Star size={12} fill="currentColor" /> {item.rating}
-                  <span className="text-[10px] text-gray-300 font-bold ml-1">({item.reviews})</span>
+              <div className="flex items-center gap-3 mt-1.5">
+                <div className="flex items-center gap-1 text-amber-500 font-black text-[11px]">
+                  <Star size={10} fill="currentColor" /> {item.rating}
+                  <span className="text-[9px] text-gray-300 font-bold ml-0.5">({item.reviews})</span>
                 </div>
-                <div className="flex items-center gap-1 text-gray-400 text-[10px] font-black uppercase">
+                <div className="flex items-center gap-1 text-gray-400 text-[9px] font-black uppercase">
                   <MapPin size={10} /> {item.dist}
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center gap-2">
-                <div className="flex -space-x-2">
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex -space-x-1.5">
                   {[1,2,3].map(i => (
-                    <img key={i} src={`https://i.pravatar.cc/100?u=${item.id}${i}`} className="w-6 h-6 rounded-full border-2 border-white shadow-sm" alt="" />
+                    <img key={i} src={`https://i.pravatar.cc/100?u=${item.id}${i}`} className="w-5 h-5 rounded-full border-2 border-white shadow-sm" alt="" />
                   ))}
                 </div>
-                <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Equipe disponível</span>
+                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Equipe disponível</span>
               </div>
             </div>
 
-            <button className="w-10 h-10 bg-gray-50 text-gray-300 rounded-2xl flex items-center justify-center group-hover:bg-[#E11D48] group-hover:text-white transition-all shadow-inner">
-              <ChevronRight size={20} />
+            <button className="w-9 h-9 bg-gray-50 text-gray-300 rounded-xl flex items-center justify-center group-hover:bg-[#E11D48] group-hover:text-white transition-all shadow-inner">
+              <ChevronRight size={18} />
             </button>
           </div>
         ))}

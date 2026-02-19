@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   Scissors, User, Calendar as CalendarIcon, Clock, 
   ChevronRight, ArrowLeft, Star, MapPin, CheckCircle2,
-  CalendarDays, UserCheck, Sparkles, ArrowRight
+  CalendarDays, UserCheck, Sparkles, ArrowRight, Home, Building2, Plus
 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { storage } from '../../utils/storage';
-import { TeamMember, Service, Company } from '../../types';
+import { TeamMember, Service, Company, Address } from '../../types';
+import AddressForm from './AddressForm';
 
 interface BookingProps {
-  initialService?: Service;
+  services: Service[];
   initialCompany?: Company;
   onConfirm: (bookingDetails: any) => void;
   onBack: () => void;
@@ -27,20 +28,36 @@ const mockProfessionals: TeamMember[] = [
   { id: '3', name: 'Juliana Lima', role: 'Esteticista Facial', avatar: 'https://i.pravatar.cc/150?u=juju', status: 'online', email: '', phone: '', commission: 0, commissionEnabled: false, specialties: 'Limpeza de Pele', active: true },
 ];
 
-const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onConfirm, onBack }) => {
+const mockAddresses: Address[] = [
+  { id: '1', label: 'Casa', street: 'Rua das Flores', number: '123', city: 'São Paulo', state: 'SP', isDefault: true },
+  { id: '2', label: 'Trabalho', street: 'Av. Paulista', number: '1000', city: 'São Paulo', state: 'SP', isDefault: false },
+];
+
+const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, onBack }) => {
   const { showFeedback } = useFeedback();
-  const [step, setStep] = useState(initialService ? 1 : 0); // Se já tem serviço, pula pra data
+  const [step, setStep] = useState(0); 
+  const [selectedLocation, setSelectedLocation] = useState<'presencial' | 'domicilio' | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>(mockAddresses);
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedPro, setSelectedPro] = useState<TeamMember | null>(null);
 
   const steps = [
+    { id: 'location', label: 'Onde?' },
     { id: 'date', label: 'Quando?' },
     { id: 'pro', label: 'Com quem?' },
     { id: 'review', label: 'Revisão' }
   ];
 
   const handleNext = () => {
+    if (step === 0 && !selectedLocation) {
+      return showFeedback('error', 'Selecione o local de atendimento.');
+    }
+    if (step === 0 && selectedLocation === 'domicilio' && !selectedAddress) {
+      return showFeedback('error', 'Selecione um endereço para o atendimento.');
+    }
     if (step === 1 && (!selectedDate || !selectedTime)) {
       return showFeedback('error', 'Selecione a data e o horário.');
     }
@@ -52,8 +69,10 @@ const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onCon
 
   const handleFinishSelection = () => {
     const bookingDetails = {
-      service: initialService,
+      services,
       company: initialCompany,
+      location: selectedLocation,
+      address: selectedAddress,
       date: selectedDate,
       time: selectedTime,
       professional: selectedPro
@@ -61,10 +80,30 @@ const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onCon
     onConfirm(bookingDetails);
   };
 
+  const cartTotal = services.reduce((acc, s) => acc + s.price, 0);
+  const cartDuration = services.reduce((acc, s) => acc + s.duration, 0);
+
+  const handleSaveNewAddress = (newAddr: Partial<Address>) => {
+    const addr = newAddr as Address;
+    setAddresses([...addresses, addr]);
+    setSelectedAddress(addr);
+    setIsAddingAddress(false);
+    showFeedback('success', 'Endereço adicionado!');
+  };
+
+  if (isAddingAddress) {
+    return (
+      <AddressForm 
+        onBack={() => setIsAddingAddress(false)}
+        onSave={handleSaveNewAddress}
+      />
+    );
+  }
+
   const StepHeader = ({ title, desc }: any) => (
-    <div className="mb-8">
-      <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-none">{title}</h2>
-      <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">{desc}</p>
+    <div className="mb-6">
+      <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-none">{title}</h2>
+      <p className="text-gray-400 font-bold uppercase tracking-widest text-[9px] mt-1.5">{desc}</p>
     </div>
   );
 
@@ -91,10 +130,99 @@ const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onCon
          ))}
       </div>
 
+      {/* STEP 0: LOCAL DE ATENDIMENTO */}
+      {step === 0 && (
+        <section className="animate-in slide-in-from-right-4 duration-500">
+          <StepHeader title="Onde?" desc="Escolha o local de sua preferência" />
+          
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button 
+                onClick={() => setSelectedLocation('presencial')}
+                className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${
+                  selectedLocation === 'presencial' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedLocation === 'presencial' ? 'bg-white/10' : 'bg-rose-50 text-pink-600'}`}>
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-lg leading-none mb-1">Presencial</h4>
+                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'presencial' ? 'text-slate-400' : 'text-gray-400'}`}>Vou até a empresa</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => setSelectedLocation('domicilio')}
+                className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${
+                  selectedLocation === 'domicilio' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedLocation === 'domicilio' ? 'bg-white/10' : 'bg-rose-50 text-pink-600'}`}>
+                  <Home size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-lg leading-none mb-1">A Domicílio</h4>
+                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'domicilio' ? 'text-slate-400' : 'text-gray-400'}`}>A especialista vem até mim</p>
+                </div>
+              </button>
+            </div>
+
+            {selectedLocation === 'domicilio' && (
+              <div className="animate-in slide-in-from-top-4 duration-500 space-y-4 pt-4">
+                <div className="flex items-center gap-2 px-2">
+                  <MapPin size={16} className="text-pink-600" />
+                  <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Selecione o Endereço</h4>
+                </div>
+                <div className="space-y-3">
+                  {addresses.map(addr => (
+                    <button 
+                      key={addr.id}
+                      onClick={() => setSelectedAddress(addr)}
+                      className={`w-full p-5 rounded-2xl border-2 transition-all flex items-center justify-between ${
+                        selectedAddress?.id === addr.id ? 'bg-pink-50 border-pink-600 text-pink-600' : 'bg-white border-gray-50 text-gray-500 hover:border-pink-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedAddress?.id === addr.id ? 'bg-pink-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
+                          <MapPin size={20} />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-black text-sm leading-none mb-1">{addr.label}</p>
+                          <p className="text-[10px] font-bold opacity-70">{addr.street}, {addr.number}</p>
+                        </div>
+                      </div>
+                      {selectedAddress?.id === addr.id && <CheckCircle2 size={20} />}
+                    </button>
+                  ))}
+                  <button 
+                    onClick={() => setIsAddingAddress(true)}
+                    className="w-full p-5 rounded-2xl border-2 border-dashed border-gray-100 text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 transition-all"
+                  >
+                    <Plus size={20} /> <span className="text-xs font-black uppercase tracking-widest">Novo Endereço</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button 
+              onClick={handleNext}
+              disabled={!selectedLocation || (selectedLocation === 'domicilio' && !selectedAddress)}
+              className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-30"
+            >
+              Continuar <ArrowRight size={22} />
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* STEP 1: DATA E HORA */}
       {step === 1 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
-          <StepHeader title="Data & Horário" desc={initialService?.name || 'Selecione o melhor momento'} />
+          <button onClick={() => setStep(0)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
+            <ArrowLeft size={14} /> Voltar para local
+          </button>
+          <StepHeader title="Data & Horário" desc={services.length === 1 ? services[0].name : `${services.length} serviços selecionados`} />
           
           <div className="space-y-8">
             {/* Seletor de Datas Horizontal */}
@@ -203,19 +331,47 @@ const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onCon
         <section className="animate-in slide-in-from-right-4 duration-500">
           <button onClick={() => setStep(2)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest"><ArrowLeft size={14} /> Voltar</button>
           <StepHeader title="Quase lá!" desc="Confira todos os detalhes do seu brilho" />
-          
-          <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-2xl shadow-gray-100 mb-8 space-y-10 relative overflow-hidden">
+                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100 mb-6 space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50 blur-3xl rounded-full -mr-16 -mt-16"></div>
             
             {/* Serviço e Empresa */}
-            <div className="flex items-center gap-5 pb-8 border-b border-gray-50 relative z-10">
-               <div className="w-20 h-20 bg-rose-50 rounded-[2rem] flex items-center justify-center text-pink-600 shadow-inner">
-                  <Scissors size={32} />
+            <div className="flex flex-col gap-3 pb-6 border-b border-gray-50 relative z-10">
+               <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-pink-600 shadow-inner">
+                     <Scissors size={24} />
+                  </div>
+                  <div>
+                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-1.5">{initialCompany?.name}</p>
+                     <h4 className="font-black text-gray-900 text-xl leading-none mb-1">
+                       {services.length === 1 ? services[0].name : `${services.length} Serviços`}
+                     </h4>
+                     <span className="text-[9px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full uppercase">{cartDuration} min de cuidado</span>
+                  </div>
                </div>
-               <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-2">{initialCompany?.name}</p>
-                  <h4 className="font-black text-gray-900 text-2xl leading-none mb-1">{initialService?.name}</h4>
-                  <span className="text-[10px] font-black text-pink-600 bg-pink-50 px-3 py-1 rounded-full uppercase">{initialService?.duration} min de cuidado</span>
+               {services.length > 1 && (
+                 <div className="flex flex-wrap gap-2 mt-2">
+                   {services.map(s => (
+                     <span key={s.id} className="text-[9px] font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-lg uppercase">{s.name}</span>
+                   ))}
+                 </div>
+               )}
+            </div>
+
+            {/* Local e Endereço */}
+            <div className="pb-8 border-b border-gray-50 relative z-10">
+               <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
+                     {selectedLocation === 'domicilio' ? <Home size={24} /> : <Building2 size={24} />}
+                  </div>
+                  <div>
+                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Local de Atendimento</p>
+                     <p className="text-sm font-bold text-gray-800">
+                       {selectedLocation === 'domicilio' ? `A Domicílio: ${selectedAddress?.label}` : 'Presencial na Empresa'}
+                     </p>
+                     {selectedLocation === 'domicilio' && (
+                       <p className="text-[10px] text-gray-400 font-medium">{selectedAddress?.street}, {selectedAddress?.number}</p>
+                     )}
+                  </div>
                </div>
             </div>
 
@@ -247,7 +403,7 @@ const Booking: React.FC<BookingProps> = ({ initialService, initialCompany, onCon
                <div className="absolute inset-0 bg-gradient-to-r from-pink-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                <div className="relative z-10">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Total Investido</span>
-                  <p className="text-3xl font-black tracking-tighter mt-1">R$ {initialService?.price.toFixed(2)}</p>
+                  <p className="text-3xl font-black tracking-tighter mt-1">R$ {cartTotal.toFixed(2)}</p>
                </div>
                <div className="relative z-10 text-right">
                   <span className="text-[8px] font-black bg-white/10 px-2 py-1 rounded-lg uppercase">Pagamento no Local</span>

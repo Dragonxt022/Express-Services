@@ -57,3 +57,11 @@ export const BOTTOM_BAR_ITEMS = {
   EMPRESA: ['dashboard', 'schedule', 'flash_offers', 'launcher'],
   CLIENTE: ['explore', 'history', 'favorites', 'launcher'],
 };
+
+export const AVAILABLE_CITIES = [
+  'Cujubim',
+  'Ariquemes',
+  'Ji-Paraná',
+  'Rio Crespo',
+  'Machadinho do Oeste'
+];

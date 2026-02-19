@@ -6,7 +6,8 @@ import { useFeedback } from '../../context/FeedbackContext';
 interface CheckoutProps {
   onConfirm: () => void;
   onBack: () => void;
-  serviceData: any;
+  services: any[];
+  bookingDetails: any;
 }
 
 // Fixed: Component was complete but file was truncated in provided context
@@ -101,11 +102,15 @@ const PixModal: React.FC<{ onConfirm: () => void, onCancel: () => void, price: n
 };
 
 // Fixed: Added missing logic and default export to fix "has no default export" error in App.tsx
-const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, serviceData }) => {
+const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookingDetails }) => {
   const { showFeedback } = useFeedback();
   const [method, setMethod] = useState<'card' | 'pix'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPixModal, setShowPixModal] = useState(false);
+
+  const subtotal = services.reduce((acc, s) => acc + s.price, 0);
+  const discount = 10;
+  const total = subtotal - discount;
 
   const handlePayment = () => {
     if (method === 'pix') {
@@ -133,33 +138,53 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, serviceData }) =
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
-        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Resumo do Atendimento</h3>
-        <div className="flex items-center justify-between pb-6 border-b border-gray-50 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-[#E11D48] shadow-inner">
-              <CheckCircle2 size={28} />
+      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">Resumo do Pedido</h3>
+        
+        <div className="space-y-3 mb-4 pb-4 border-b border-gray-50">
+          {services.map((service, idx) => (
+            <div key={idx} className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-[#E11D48] shadow-inner">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-xs leading-none mb-1">{service.name}</p>
+                  <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{service.duration} min</p>
+                </div>
+              </div>
+              <span className="text-xs font-black text-gray-900 tracking-tighter">R$ {service.price.toFixed(2)}</span>
             </div>
-            <div>
-              <p className="font-black text-gray-900 text-lg leading-none mb-1">{serviceData.name}</p>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Studio Elegance • 15:00</p>
-            </div>
-          </div>
-          <span className="text-xl font-black text-gray-900 tracking-tighter">R$ {serviceData.price.toFixed(2)}</span>
+          ))}
+        </div>
+
+        <div className="mb-4 pb-4 border-b border-gray-50">
+           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Local e Horário</p>
+           <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-gray-800">
+                {bookingDetails.location === 'domicilio' ? 'A Domicílio' : 'Presencial'}
+              </p>
+              <p className="text-[10px] font-black text-pink-600 uppercase">
+                {new Date(bookingDetails.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} • {bookingDetails.time}
+              </p>
+           </div>
+           {bookingDetails.location === 'domicilio' && (
+             <p className="text-[9px] text-gray-400 mt-1">{bookingDetails.address?.street}, {bookingDetails.address?.number}</p>
+           )}
         </div>
 
         <div className="space-y-3">
           <div className="flex justify-between text-xs font-bold text-gray-400">
             <span>Subtotal</span>
-            <span>R$ {serviceData.price.toFixed(2)}</span>
+            <span>R$ {subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-xs font-bold text-green-500">
             <span>Desconto (BEM-VINDO)</span>
-            <span>- R$ 10,00</span>
+            <span>- R$ {discount.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-end pt-4 border-t border-gray-50">
             <span className="text-sm font-black text-gray-900 uppercase">Total a Pagar</span>
-            <span className="text-3xl font-black text-[#E11D48] tracking-tighter">R$ {(serviceData.price - 10).toFixed(2)}</span>
+            <span className="text-3xl font-black text-[#E11D48] tracking-tighter">R$ {total.toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -169,38 +194,38 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, serviceData }) =
         
         <button 
           onClick={() => setMethod('card')}
-          className={`w-full p-6 rounded-[2.5rem] border-2 flex items-center justify-between transition-all ${
+          className={`w-full p-4 rounded-3xl border-2 flex items-center justify-between transition-all ${
             method === 'card' ? 'border-[#E11D48] bg-rose-50/30' : 'border-gray-100 bg-white opacity-60'
           }`}
         >
-          <div className="flex items-center gap-4 text-left">
-            <div className={`p-3 rounded-2xl ${method === 'card' ? 'bg-[#E11D48] text-white shadow-lg shadow-rose-100' : 'bg-gray-100 text-gray-400'}`}>
-              <CreditCard size={24} />
+          <div className="flex items-center gap-3 text-left">
+            <div className={`p-2.5 rounded-xl ${method === 'card' ? 'bg-[#E11D48] text-white shadow-lg shadow-rose-100' : 'bg-gray-100 text-gray-400'}`}>
+              <CreditCard size={20} />
             </div>
             <div>
-              <p className="font-black text-gray-900 leading-none mb-1">Cartão de Crédito</p>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Visa Final 4432</p>
+              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">Cartão de Crédito</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Visa Final 4432</p>
             </div>
           </div>
-          {method === 'card' && <div className="w-5 h-5 bg-[#E11D48] rounded-full border-4 border-white shadow-sm"></div>}
+          {method === 'card' && <div className="w-4 h-4 bg-[#E11D48] rounded-full border-2 border-white shadow-sm"></div>}
         </button>
 
         <button 
           onClick={() => setMethod('pix')}
-          className={`w-full p-6 rounded-[2.5rem] border-2 flex items-center justify-between transition-all ${
+          className={`w-full p-4 rounded-3xl border-2 flex items-center justify-between transition-all ${
             method === 'pix' ? 'border-[#E11D48] bg-rose-50/30' : 'border-gray-100 bg-white opacity-60'
           }`}
         >
-          <div className="flex items-center gap-4 text-left">
-            <div className={`p-3 rounded-2xl ${method === 'pix' ? 'bg-[#E11D48] text-white shadow-lg shadow-rose-100' : 'bg-gray-100 text-gray-400'}`}>
-              <QrCode size={24} />
+          <div className="flex items-center gap-3 text-left">
+            <div className={`p-2.5 rounded-xl ${method === 'pix' ? 'bg-[#E11D48] text-white shadow-lg shadow-rose-100' : 'bg-gray-100 text-gray-400'}`}>
+              <QrCode size={20} />
             </div>
             <div>
-              <p className="font-black text-gray-900 leading-none mb-1">Pix (Split Instantâneo)</p>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Confirmação em tempo real</p>
+              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">Pix (Split Instantâneo)</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Confirmação em tempo real</p>
             </div>
           </div>
-          {method === 'pix' && <div className="w-5 h-5 bg-[#E11D48] rounded-full border-4 border-white shadow-sm"></div>}
+          {method === 'pix' && <div className="w-4 h-4 bg-[#E11D48] rounded-full border-2 border-white shadow-sm"></div>}
         </button>
       </div>
 
@@ -230,7 +255,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, serviceData }) =
         <PixModal 
           onConfirm={onConfirm} 
           onCancel={() => setShowPixModal(false)} 
-          price={serviceData.price - 10} 
+          price={total} 
         />
       )}
     </div>

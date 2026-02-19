@@ -29,6 +29,7 @@ import AppLauncher from './pages/AppLauncher';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import Onboarding from './pages/auth/Onboarding';
 import Concierge from './components/Concierge';
 import { User, UserRole, Service, Company } from './types';
 import { COLORS } from './constants';
@@ -38,10 +39,10 @@ import { FeedbackProvider } from './context/FeedbackContext';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeView, setActiveView] = useState('launcher');
-  const [authView, setAuthView] = useState<'welcome' | 'login' | 'register' | 'forgot_password'>('welcome');
+  const [authView, setAuthView] = useState<'welcome' | 'login' | 'register' | 'forgot_password' | 'onboarding'>('welcome');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [pendingService, setPendingService] = useState<Service | null>(null);
+  const [cartServices, setCartServices] = useState<Service[]>([]);
   const [bookingData, setBookingData] = useState<any>(null);
 
   useEffect(() => {
@@ -124,9 +125,9 @@ const App: React.FC = () => {
           />
         );
         // Novo Fluxo: Booking intermediário
-        if (activeView === 'booking' && pendingService) return (
+        if (activeView === 'booking' && cartServices.length > 0) return (
           <Booking 
-            initialService={pendingService}
+            services={cartServices}
             initialCompany={{ name: 'Studio Elegance', id: activeCompanyId || '2' } as Company}
             onBack={() => setActiveView('company_details')}
             onConfirm={(details) => {
@@ -137,10 +138,13 @@ const App: React.FC = () => {
         );
         if (activeView === 'checkout' && bookingData) return (
           <Checkout 
-            serviceData={bookingData.service} 
+            services={bookingData.services} 
             bookingDetails={bookingData}
             onBack={() => setActiveView('booking')} 
-            onConfirm={() => setActiveView('history')}
+            onConfirm={() => {
+              setCartServices([]);
+              setActiveView('history');
+            }}
           />
         );
         if (activeView === 'history') return <History />;
@@ -151,10 +155,9 @@ const App: React.FC = () => {
           <CompanyDetails 
             companyId={activeCompanyId} 
             onBack={() => setActiveView('explore')} 
-            onBookService={(service) => { 
-              setPendingService(service); 
-              setActiveView('booking'); // Agora vai para a seleção de data/hora
-            }} 
+            cartServices={cartServices}
+            onUpdateCart={setCartServices}
+            onProceedToBooking={() => setActiveView('booking')}
           />
         );
         break;
@@ -173,7 +176,10 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} onNavigate={setAuthView} />;
       }
       if (authView === 'register') {
-        return <Register onBack={() => setAuthView('login')} onSuccess={() => setAuthView('login')} />;
+        return <Register onBack={() => setAuthView('login')} onSuccess={() => setAuthView('onboarding')} />;
+      }
+      if (authView === 'onboarding') {
+        return <Onboarding onComplete={() => setAuthView('login')} />;
       }
       if (authView === 'forgot_password') {
         return <ForgotPassword onBack={() => setAuthView('login')} />;
