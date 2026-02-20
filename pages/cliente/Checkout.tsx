@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Zap, ShieldCheck, ArrowRight, ArrowLeft, CheckCircle2, QrCode, Copy, Clock, Loader2 } from 'lucide-react';
+import { CreditCard, Zap, ShieldCheck, ArrowRight, ArrowLeft, CheckCircle2, QrCode, Copy, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
+import { ordersService } from '../../services/api';
 
 interface CheckoutProps {
   onConfirm: () => void;
@@ -107,23 +108,51 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
   const [method, setMethod] = useState<'card' | 'pix'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPixModal, setShowPixModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const subtotal = services.reduce((acc, s) => acc + s.price, 0);
   const discount = 10;
   const total = subtotal - discount;
 
-  const handlePayment = () => {
-    if (method === 'pix') {
-      setShowPixModal(true);
-      return;
-    }
+  const handlePayment = async () => {
+    try {
+      setError(null);
+      
+      if (method === 'pix') {
+        setShowPixModal(true);
+        return;
+      }
 
-    setIsProcessing(true);
-    setTimeout(() => {
+      setIsProcessing(true);
+
+      // Criar pedido via API
+      const orderData = {
+        customer_id: 1, // Seria do usuário logado
+        company_id: bookingDetails.company?.id || 1,
+        services: services.map(s => s.id),
+        total_price: subtotal,
+        discount: discount,
+        payment_method: 'credit_card',
+        status: 'confirmed'
+      };
+
+      const response = await ordersService.create(orderData);
+
+      if (response.data?.success || response.data?.id) {
+        showFeedback('success', 'Pagamento processado com sucesso!');
+        setTimeout(() => {
+          onConfirm();
+        }, 1500);
+      } else {
+        setError('Erro ao processar pagamento. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao processar pagamento:', err);
+      setError(err.response?.data?.message || 'Erro ao processar pagamento. Tente novamente.');
+      showFeedback('error', 'Erro ao processar pagamento');
+    } finally {
       setIsProcessing(false);
-      showFeedback('success', 'Pagamento processado e split realizado com sucesso!');
-      onConfirm();
-    }, 3000);
+    }
   };
 
   return (
@@ -137,6 +166,13 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
           <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-2">Seguro via Mercado Pago</p>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-3">
+          <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+          <p className="text-red-700 font-semibold text-sm">{error}</p>
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">Resumo do Pedido</h3>

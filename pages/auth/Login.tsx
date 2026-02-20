@@ -1,32 +1,54 @@
 
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { COLORS } from '../../constants';
 import { UserRole } from '../../types';
+import { authService } from '../../services/api';
+import { storage } from '../../utils/storage';
 
 interface LoginProps {
-  onLogin: (role: UserRole) => void;
+  onLogin: (role: UserRole, token: string, user: any) => void;
   onNavigate: (view: 'register' | 'forgot_password') => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('gabriel@email.com');
+  const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulação de login - em um app real aqui iria a chamada de API
-    setTimeout(() => {
-      // Para fins de demo, se o email contiver 'admin' loga como admin, 
-      // se contiver 'empresa' loga como empresa, senão cliente
-      if (email.includes('admin')) onLogin(UserRole.ADMIN);
-      else if (email.includes('empresa')) onLogin(UserRole.EMPRESA);
-      else onLogin(UserRole.CLIENTE);
+    setError(null);
+
+    try {
+      const response = await authService.login(email, password);
+      
+      if (response.data?.success && response.data?.token) {
+        // Guardar token no localStorage
+        storage.set('token', response.data.token);
+        storage.set('user', response.data.user);
+        
+        // Mapear role para UserRole
+        const roleMap: Record<string, UserRole> = {
+          'CLIENTE': UserRole.CLIENTE,
+          'EMPRESA': UserRole.EMPRESA,
+          'ADMIN': UserRole.ADMIN,
+        };
+        
+        const userRole = roleMap[response.data.user.role] || UserRole.CLIENTE;
+        onLogin(userRole, response.data.token, response.data.user);
+      } else {
+        setError('Credenciais inválidas. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao fazer login:', err);
+      setError(err.response?.data?.message || 'Erro ao fazer login. Tente novamente.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -43,6 +65,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
 
           <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">Bem-vindo de volta</h1>
           <p className="text-gray-500 mb-10 font-medium">Acesse sua conta para continuar</p>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+              <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+              <p className="text-red-700 font-semibold text-sm">{error}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">

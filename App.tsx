@@ -53,27 +53,30 @@ const App: React.FC = () => {
     }
 
     const savedUser = storage.get<User | null>('session', null);
-    if (savedUser) {
+    const savedToken = storage.get<string>('token', null);
+    if (savedUser && savedToken) {
       setCurrentUser(savedUser);
       setActiveView(savedUser.role === UserRole.CLIENTE ? 'explore' : 'launcher');
     }
   }, []);
 
-  const handleLogin = (role: UserRole) => {
-    const mockUsers: Record<UserRole, User> = {
-      [UserRole.ADMIN]: { id: '1', name: 'Admin Master', email: 'admin@beauty.com', role: UserRole.ADMIN },
-      [UserRole.EMPRESA]: { id: '2', name: 'Studio Elegance', email: 'contato@elegance.com', role: UserRole.EMPRESA },
-      [UserRole.CLIENTE]: { id: '3', name: 'Gabriel Oliveira', email: 'gabriel@email.com', role: UserRole.CLIENTE },
+  const handleLogin = (role: UserRole, token: string, userData: any) => {
+    const user: User = {
+      id: userData.id.toString(),
+      name: userData.name,
+      email: userData.email,
+      role: role,
     };
-    const user = mockUsers[role];
     setCurrentUser(user);
     storage.set('session', user);
+    storage.set('token', token);
     setActiveView(role === UserRole.CLIENTE ? 'explore' : 'launcher');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     storage.remove('session');
+    storage.remove('token');
     setActiveView('launcher');
   };
 
@@ -198,13 +201,10 @@ const App: React.FC = () => {
                <button onClick={() => setAuthView('login')} className="w-full py-6 rounded-[1.8rem] font-black text-white shadow-xl shadow-rose-100 text-lg hover:scale-[1.02] transition-all active:scale-95" style={{ backgroundColor: COLORS.primary }}>Entrar na Conta</button>
                <button onClick={() => setAuthView('register')} className="w-full py-5 rounded-[1.8rem] font-bold bg-slate-100 text-gray-800 hover:bg-slate-200 transition-all">Criar Nova Conta</button>
                
-               <div className="pt-8 flex flex-col gap-2">
-                 <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-2">Acesso Rápido (Demo)</p>
-                 <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => handleLogin(UserRole.CLIENTE)} className="py-3 rounded-2xl bg-slate-50 text-gray-500 text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors">Cliente</button>
-                    <button onClick={() => handleLogin(UserRole.EMPRESA)} className="py-3 rounded-2xl bg-slate-50 text-gray-500 text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors">Empresa</button>
-                 </div>
-                 <button onClick={() => handleLogin(UserRole.ADMIN)} className="w-full py-3 rounded-2xl bg-slate-50 text-gray-400 text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors">Admin</button>
+               <div className="pt-8">
+                 <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-4">Contas de Teste</p>
+                 <p className="text-[9px] text-gray-400 mb-4">Email: gabriel@email.com | Senha: 123456</p>
+                 <p className="text-[9px] text-gray-400">Email: contato@elegance.com | Senha: 123456</p>
                </div>
             </div>
             <p className="mt-12 text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em]">v1.2.0 Enhanced Flow</p>

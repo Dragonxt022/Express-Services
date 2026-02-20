@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Scissors, User, Calendar as CalendarIcon, Clock, 
   ChevronRight, ArrowLeft, Star, MapPin, CheckCircle2,
-  CalendarDays, UserCheck, Sparkles, ArrowRight, Home, Building2, Plus
+  CalendarDays, UserCheck, Sparkles, ArrowRight, Home, Building2, Plus, Loader, AlertCircle
 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { storage } from '../../utils/storage';
+import { teamMembersService } from '../../services/api';
 import { TeamMember, Service, Company, Address } from '../../types';
 import AddressForm from './AddressForm';
 
@@ -20,12 +21,6 @@ interface BookingProps {
 const TIME_SLOTS = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', 
   '14:00', '14:30', '15:00', '15:30', '16:00', '17:00'
-];
-
-const mockProfessionals: TeamMember[] = [
-  { id: '1', name: 'Ana Paula', role: 'Colorimetrista Master', avatar: 'https://i.pravatar.cc/150?u=ana', status: 'online', email: '', phone: '', commission: 0, commissionEnabled: false, specialties: 'Loiros e Mechas', active: true },
-  { id: '2', name: 'Camila Souza', role: 'Barbeira Visagista', avatar: 'https://i.pravatar.cc/150?u=camila', status: 'online', email: '', phone: '', commission: 0, commissionEnabled: false, specialties: 'Barba e Cortes Curtos', active: true },
-  { id: '3', name: 'Juliana Lima', role: 'Esteticista Facial', avatar: 'https://i.pravatar.cc/150?u=juju', status: 'online', email: '', phone: '', commission: 0, commissionEnabled: false, specialties: 'Limpeza de Pele', active: true },
 ];
 
 const mockAddresses: Address[] = [
@@ -43,6 +38,9 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedPro, setSelectedPro] = useState<TeamMember | null>(null);
+  const [professionals, setProfessionals] = useState<TeamMember[]>([]);
+  const [loadingPros, setLoadingPros] = useState(false);
+  const [errorPros, setErrorPros] = useState<string | null>(null);
 
   const steps = [
     { id: 'location', label: 'Onde?' },
@@ -50,6 +48,29 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
     { id: 'pro', label: 'Com quem?' },
     { id: 'review', label: 'Revisão' }
   ];
+
+  useEffect(() => {
+    if (step === 2 && initialCompany) {
+      loadProfessionals();
+    }
+  }, [step, initialCompany]);
+
+  const loadProfessionals = async () => {
+    try {
+      setLoadingPros(true);
+      setErrorPros(null);
+      const response = await teamMembersService.getByCompany(initialCompany?.id || 1);
+      setProfessionals(response.data || []);
+      if (!response.data || response.data.length === 0) {
+        setErrorPros('Nenhum profissional disponível');
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar profissionais:', err);
+      setErrorPros('Erro ao carregar profissionais');
+    } finally {
+      setLoadingPros(false);
+    }
+  };
 
   const handleNext = () => {
     if (step === 0 && !selectedLocation) {
@@ -285,44 +306,58 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
           </button>
           <StepHeader title="Com Quem?" desc="Escolha a especialista de sua preferência" />
           
-          <div className="space-y-4">
-            {mockProfessionals.map((p) => (
-              <button 
-                key={p.id}
-                onClick={() => setSelectedPro(p)}
-                className={`w-full p-6 rounded-[2.5rem] border-2 transition-all flex items-center gap-6 text-left group ${
-                  selectedPro?.id === p.id ? 'bg-slate-900 border-slate-900 text-white shadow-2xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
-                }`}
-              >
-                <div className="relative">
-                  <img src={p.avatar} className="w-20 h-20 rounded-[1.8rem] object-cover shadow-md" alt={p.name} />
-                  {selectedPro?.id === p.id && (
-                    <div className="absolute -top-2 -right-2 bg-pink-600 text-white p-1.5 rounded-xl shadow-lg border-2 border-slate-900">
-                      <UserCheck size={14} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-black text-xl leading-none mb-1">{p.name}</h4>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedPro?.id === p.id ? 'text-pink-400' : 'text-pink-600'}`}>{p.role}</p>
-                  <p className={`text-xs mt-3 line-clamp-1 ${selectedPro?.id === p.id ? 'text-slate-400' : 'text-gray-400'}`}>Esp: {p.specialties}</p>
-                </div>
-                <div className={`p-3 rounded-2xl transition-colors ${selectedPro?.id === p.id ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
-                  <ChevronRight size={20} />
-                </div>
-              </button>
-            ))}
-
-            <div className="pt-6">
-              <button 
-                onClick={handleNext}
-                disabled={!selectedPro}
-                className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                Revisar Agendamento <Sparkles size={22} className="text-pink-500" />
-              </button>
+          {loadingPros ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader size={40} className="animate-spin text-[#E11D48] mb-4" />
+              <p className="text-gray-400 font-semibold">Carregando profissionais...</p>
             </div>
-          </div>
+          ) : errorPros ? (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+              <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+              <p className="text-red-700 font-semibold text-sm">{errorPros}</p>
+            </div>
+          ) : professionals.length > 0 ? (
+            <div className="space-y-4">
+              {professionals.map((p) => (
+                <button 
+                  key={p.id}
+                  onClick={() => setSelectedPro(p)}
+                  className={`w-full p-6 rounded-[2.5rem] border-2 transition-all flex items-center gap-6 text-left group ${
+                    selectedPro?.id === p.id ? 'bg-slate-900 border-slate-900 text-white shadow-2xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
+                  }`}
+                >
+                  <div className="relative">
+                    <img src={p.avatar || `https://i.pravatar.cc/150?u=${p.name}`} className="w-20 h-20 rounded-[1.8rem] object-cover shadow-md" alt={p.name} />
+                    {selectedPro?.id === p.id && (
+                      <div className="absolute -top-2 -right-2 bg-pink-600 text-white p-1.5 rounded-xl shadow-lg border-2 border-slate-900">
+                        <UserCheck size={14} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-black text-xl leading-none mb-1">{p.name}</h4>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedPro?.id === p.id ? 'text-pink-400' : 'text-pink-600'}`}>{p.role || 'Profissional'}</p>
+                    <p className={`text-xs mt-3 line-clamp-1 ${selectedPro?.id === p.id ? 'text-slate-400' : 'text-gray-400'}`}>Esp: {p.specialties || 'Geral'}</p>
+                  </div>
+                  <div className={`p-3 rounded-2xl transition-colors ${selectedPro?.id === p.id ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
+                    <ChevronRight size={20} />
+                  </div>
+                </button>
+              ))}
+
+              <div className="pt-6">
+                <button 
+                  onClick={handleNext}
+                  disabled={!selectedPro}
+                  className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Revisar Agendamento <Sparkles size={22} className="text-pink-500" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center py-8">Nenhum profissional disponível</p>
+          )}
         </section>
       )}
 
