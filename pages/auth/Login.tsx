@@ -12,8 +12,8 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
-  const [email, setEmail] = useState('gabriel@email.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('bruno@gmail.com');
+  const [password, setPassword] = useState('12345678');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     setError(null);
 
     try {
-      const response = await authService.login(email, password);
+      const response = await authService.login({ email, password });
       
       if (response.data?.success && response.data?.token) {
         // Guardar token no localStorage
@@ -45,7 +45,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
       }
     } catch (err: any) {
       console.error('Erro ao fazer login:', err);
-      setError(err.response?.data?.message || 'Erro ao fazer login. Tente novamente.');
+      if (err.response?.data?.companyOnboardingRequired) {
+        setError('Conta empresarial pendente. Acesse o link enviado por e-mail para ativar.');
+      } else {
+        setError(err.response?.data?.message || 'Erro ao fazer login. Tente novamente.');
+      }
     } finally {
       setIsLoading(false);
     }

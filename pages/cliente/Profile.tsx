@@ -1,9 +1,10 @@
-
+﻿
 import React, { useState } from 'react';
 import { User, Mail, Phone, Shield, Bell, ChevronRight, LogOut, Camera, Star, Award, Gift, Trophy, Zap, Target, MapPin, CreditCard, Plus, Check, Trash2 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { Address, PaymentCard } from '../../types';
 import AddressForm from './AddressForm';
+import { getCustomerAddresses, saveCustomerAddresses } from '../../utils/customerData';
 
 const ClienteProfile: React.FC = () => {
   const { showFeedback } = useFeedback();
@@ -17,10 +18,7 @@ const ClienteProfile: React.FC = () => {
     phone: '(11) 99988-7766'
   });
 
-  const [addresses, setAddresses] = useState<Address[]>([
-    { id: '1', label: 'Casa', street: 'Rua das Flores', number: '123', city: 'São Paulo', state: 'SP', isDefault: true },
-    { id: '2', label: 'Trabalho', street: 'Av. Paulista', number: '1000', city: 'São Paulo', state: 'SP', isDefault: false },
-  ]);
+  const [addresses, setAddresses] = useState<Address[]>(() => getCustomerAddresses());
 
   const [cards, setCards] = useState<PaymentCard[]>([
     { id: '1', brand: 'visa', last4: '4432', expiry: '12/28' },
@@ -33,11 +31,17 @@ const ClienteProfile: React.FC = () => {
 
   const handleSaveAddress = (newAddr: Partial<Address>) => {
     if (editingAddress) {
-      setAddresses(addresses.map(a => a.id === editingAddress.id ? { ...a, ...newAddr } : a));
-      showFeedback('success', 'Endereço atualizado!');
+      const updated = addresses.map(a => a.id === editingAddress.id ? { ...a, ...newAddr } as Address : a);
+      setAddresses(saveCustomerAddresses(updated));
+      showFeedback('success', 'EndereÃ§o atualizado!');
     } else {
-      setAddresses([...addresses, newAddr as Address]);
-      showFeedback('success', 'Endereço adicionado!');
+      const addr = {
+        ...(newAddr as Address),
+        id: newAddr.id ? String(newAddr.id) : Date.now().toString(),
+        isDefault: addresses.length === 0
+      };
+      setAddresses(saveCustomerAddresses([...addresses, addr]));
+      showFeedback('success', 'EndereÃ§o adicionado!');
     }
     setEditingAddress(null);
     setIsAddingAddress(false);
@@ -45,8 +49,9 @@ const ClienteProfile: React.FC = () => {
 
   const handleDeleteAddress = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setAddresses(addresses.filter(a => a.id !== id));
-    showFeedback('info', 'Endereço removido');
+    const updated = addresses.filter(a => a.id !== id);
+    setAddresses(saveCustomerAddresses(updated));
+    showFeedback('success', 'EndereÃ§o removido');
   };
 
   const handleUpdate = () => {
@@ -111,7 +116,7 @@ const ClienteProfile: React.FC = () => {
           onClick={() => setActiveTab('addresses')}
           className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'addresses' ? 'bg-slate-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
         >
-          Endereços
+          EndereÃ§os
         </button>
         <button 
           onClick={() => setActiveTab('payments')}
@@ -141,7 +146,7 @@ const ClienteProfile: React.FC = () => {
                      <span className="text-2xl font-black">{xp.toLocaleString()}</span>
                      <span className="text-xs font-bold text-slate-400 uppercase">XP</span>
                    </div>
-                   <span className="text-[10px] font-black text-[#E11D48] uppercase tracking-widest">Próximo Nível: 5.000 XP</span>
+                   <span className="text-[10px] font-black text-[#E11D48] uppercase tracking-widest">PrÃ³ximo NÃ­vel: 5.000 XP</span>
                 </div>
                 <div className="w-full h-4 bg-white/10 rounded-full overflow-hidden p-1 border border-white/5">
                    <div className="h-full bg-[#E11D48] rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(225,29,72,0.6)]" style={{ width: `${progress}%` }}></div>
@@ -152,7 +157,7 @@ const ClienteProfile: React.FC = () => {
                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
                    <Zap size={18} className="mx-auto mb-2 text-amber-400" />
                    <p className="text-xl font-black">12</p>
-                   <p className="text-[8px] font-black text-slate-400 uppercase">Serviços</p>
+                   <p className="text-[8px] font-black text-slate-400 uppercase">ServiÃ§os</p>
                 </div>
                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
                    <Award size={18} className="mx-auto mb-2 text-blue-400" />
@@ -191,7 +196,7 @@ const ClienteProfile: React.FC = () => {
                 />
               </div>
               <button onClick={handleUpdate} className="w-full mt-4 py-5 bg-slate-900 text-white font-black rounded-[1.5rem] shadow-xl hover:bg-black transition-all">
-                Salvar Alterações
+                Salvar AlteraÃ§Ãµes
               </button>
             </div>
           </Section>
@@ -224,7 +229,7 @@ const ClienteProfile: React.FC = () => {
                       <h4 className="font-black text-gray-900 text-lg leading-none">{addr.label}</h4>
                       {addr.isDefault && <Check size={14} className="text-pink-600" />}
                     </div>
-                    <p className="text-xs font-medium text-gray-400 mt-1">{addr.street}, {addr.number} • {addr.city}</p>
+                    <p className="text-xs font-medium text-gray-400 mt-1">{addr.street}, {addr.number} â€¢ {addr.city}</p>
                   </div>
                </div>
                <div className="flex items-center gap-2">
@@ -245,7 +250,7 @@ const ClienteProfile: React.FC = () => {
         <div className="space-y-4 animate-in fade-in slide-in-from-right-8 duration-500">
            <div className="flex justify-between items-center px-4 mb-2">
              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Carteira Digital</h3>
-             <button className="flex items-center gap-2 text-[#E11D48] font-black text-[10px] uppercase tracking-widest"><Plus size={14} /> Novo Cartão</button>
+             <button className="flex items-center gap-2 text-[#E11D48] font-black text-[10px] uppercase tracking-widest"><Plus size={14} /> Novo CartÃ£o</button>
           </div>
           {cards.map(card => (
             <div key={card.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-pink-200 transition-all">
@@ -254,7 +259,7 @@ const ClienteProfile: React.FC = () => {
                     {card.brand}
                   </div>
                   <div>
-                    <h4 className="font-black text-gray-900 text-lg leading-none">•••• {card.last4}</h4>
+                    <h4 className="font-black text-gray-900 text-lg leading-none">â€¢â€¢â€¢â€¢ {card.last4}</h4>
                     <p className="text-[10px] font-black text-gray-400 uppercase mt-1">Expira em {card.expiry}</p>
                   </div>
                </div>
@@ -267,7 +272,7 @@ const ClienteProfile: React.FC = () => {
             </div>
             <div>
               <p className="text-emerald-800 font-black text-sm">Pix Split Ativo</p>
-              <p className="text-emerald-600/70 text-[10px] font-bold uppercase tracking-widest leading-none mt-1">Cashback instantâneo via Mercado Pago</p>
+              <p className="text-emerald-600/70 text-[10px] font-bold uppercase tracking-widest leading-none mt-1">Cashback instantÃ¢neo via Mercado Pago</p>
             </div>
           </div>
         </div>
@@ -276,7 +281,7 @@ const ClienteProfile: React.FC = () => {
       <button className="w-full mt-10 flex items-center justify-between p-6 bg-red-50 rounded-[2rem] text-red-600 font-black group hover:bg-red-100 transition-all">
         <div className="flex items-center gap-3">
           <LogOut size={20} />
-          <span className="text-sm uppercase tracking-widest">Encerrar Sessão</span>
+          <span className="text-sm uppercase tracking-widest">Encerrar SessÃ£o</span>
         </div>
         <ChevronRight size={20} className="group-hover:translate-x-2 transition-transform" />
       </button>
@@ -285,3 +290,5 @@ const ClienteProfile: React.FC = () => {
 };
 
 export default ClienteProfile;
+
+

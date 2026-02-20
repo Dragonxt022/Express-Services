@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { storage } from '../utils/storage';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3000/api';
 
 // Criar instância do Axios
 const api = axios.create({
@@ -12,7 +13,7 @@ const api = axios.create({
 
 // Interceptador para adicionar token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = storage.get<string | null>('token', null);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -21,24 +22,30 @@ api.interceptors.request.use((config) => {
 
 // Autenticação
 export const authService = {
-  register: (data) => api.post('/users/register', data),
+  register: (data) => api.post('/users/register', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+  }),
   login: (data) => api.post('/users/login', data),
+  verifyEmail: (token) => api.post('/users/verify-email', { token }),
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/profile', data),
 };
 
 // Usuários
 export const usersService = {
-  getAll: (params) => api.get('/users', { params }),
+  getAll: (params?) => api.get('/users', { params }),
   getById: (id) => api.get(`/users/${id}`),
   delete: (id) => api.delete(`/users/${id}`),
 };
 
 // Empresas
 export const companiesService = {
-  getAll: (params) => api.get('/companies', { params }),
+  getAll: (params?) => api.get('/companies', { params }),
   getById: (id) => api.get(`/companies/${id}`),
-  getByCategory: (categoryId, params) => api.get(`/companies/category/${categoryId}`, { params }),
+  getByCategory: (categoryId, params?) => api.get(`/companies/category/${categoryId}`, { params }),
+  acceptInvite: (data) => api.post('/companies/accept-invite', data),
+  getMySettings: () => api.get('/companies/me/settings'),
+  updateMySettings: (data) => api.put('/companies/me/settings', data),
   create: (data) => api.post('/companies', data),
   update: (id, data) => api.put(`/companies/${id}`, data),
   delete: (id) => api.delete(`/companies/${id}`),
@@ -46,11 +53,11 @@ export const companiesService = {
 
 // Serviços
 export const servicesService = {
-  getAll: (params) => api.get('/services', { params }),
-  search: (params) => api.get('/services/search', { params }),
+  getAll: (params?) => api.get('/services', { params }),
+  search: (params?) => api.get('/services/search', { params }),
   getById: (id) => api.get(`/services/${id}`),
-  getByCompany: (companyId, params) => api.get(`/services/company/${companyId}`, { params }),
-  getByCategory: (categoryId, params) => api.get(`/services/category/${categoryId}`, { params }),
+  getByCompany: (companyId, params?) => api.get(`/services/company/${companyId}`, { params }),
+  getByCategory: (categoryId, params?) => api.get(`/services/category/${categoryId}`, { params }),
   create: (data) => api.post('/services', data),
   update: (id, data) => api.put(`/services/${id}`, data),
   delete: (id) => api.delete(`/services/${id}`),
@@ -58,10 +65,10 @@ export const servicesService = {
 
 // Agendamentos
 export const appointmentsService = {
-  getAll: (params) => api.get('/appointments', { params }),
+  getAll: (params?) => api.get('/appointments', { params }),
   getById: (id) => api.get(`/appointments/${id}`),
-  getByCustomer: (customerId, params) => api.get(`/appointments/customer/${customerId}`, { params }),
-  getByCompany: (companyId, params) => api.get(`/appointments/company/${companyId}`, { params }),
+  getByCustomer: (customerId, params?) => api.get(`/appointments/customer/${customerId}`, { params }),
+  getByCompany: (companyId, params?) => api.get(`/appointments/company/${companyId}`, { params }),
   create: (data) => api.post('/appointments', data),
   update: (id, data) => api.put(`/appointments/${id}`, data),
   updateStatus: (id, status) => api.patch(`/appointments/${id}/status`, { status }),
@@ -70,10 +77,10 @@ export const appointmentsService = {
 
 // Pedidos
 export const ordersService = {
-  getAll: (params) => api.get('/orders', { params }),
+  getAll: (params?) => api.get('/orders', { params }),
   getById: (id) => api.get(`/orders/${id}`),
-  getByCustomer: (customerId, params) => api.get(`/orders/customer/${customerId}`, { params }),
-  getByCompany: (companyId, params) => api.get(`/orders/company/${companyId}`, { params }),
+  getByCustomer: (customerId, params?) => api.get(`/orders/customer/${customerId}`, { params }),
+  getByCompany: (companyId, params?) => api.get(`/orders/company/${companyId}`, { params }),
   create: (data) => api.post('/orders', data),
   checkout: (data) => api.post('/orders/checkout', data),
   update: (id, data) => api.put(`/orders/${id}`, data),
@@ -83,9 +90,9 @@ export const ordersService = {
 
 // Profissionais
 export const teamMembersService = {
-  getAll: (params) => api.get('/team-members', { params }),
+  getAll: (params?) => api.get('/team-members', { params }),
   getById: (id) => api.get(`/team-members/${id}`),
-  getByCompany: (companyId, params) => api.get(`/team-members/company/${companyId}`, { params }),
+  getByCompany: (companyId, params?) => api.get(`/team-members/company/${companyId}`, { params }),
   create: (data) => api.post('/team-members', data),
   update: (id, data) => api.put(`/team-members/${id}`, data),
   updateStatus: (id, status) => api.patch(`/team-members/${id}/status`, { status }),
@@ -94,9 +101,9 @@ export const teamMembersService = {
 
 // Ofertas Relâmpago
 export const flashOffersService = {
-  getAll: (params) => api.get('/flash-offers', { params }),
+  getAll: (params?) => api.get('/flash-offers', { params }),
   getById: (id) => api.get(`/flash-offers/${id}`),
-  getByCompany: (companyId, params) => api.get(`/flash-offers/company/${companyId}`, { params }),
+  getByCompany: (companyId, params?) => api.get(`/flash-offers/company/${companyId}`, { params }),
   create: (data) => api.post('/flash-offers', data),
   update: (id, data) => api.put(`/flash-offers/${id}`, data),
   delete: (id) => api.delete(`/flash-offers/${id}`),

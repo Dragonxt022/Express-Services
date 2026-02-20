@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Building2, User, MapPin } from 'lucide-react';
-import { Company } from '../../types';
-import { storage } from '../../utils/storage';
 import { maskCNPJ, maskCEP, maskPhone } from '../../utils/masks';
 import { validateEmail, validateCNPJ, validateRequired } from '../../utils/validation';
 import { useFeedback } from '../../context/FeedbackContext';
+import { companiesService } from '../../services/api';
 
 interface CompanyFormProps {
   companyId?: string | null;
@@ -39,26 +38,37 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
 
   useEffect(() => {
     if (companyId) {
-      const companies = storage.get<Company[]>('admin_companies', []);
-      const company = companies.find(c => c.id === companyId);
-      if (company) {
-        setFormData(prev => ({ 
-          ...prev, 
-          name: company.name, 
-          cnpj: company.cnpj,
-          royaltyPercent: company.royaltyPercent,
-          status: company.status,
-          cep: company.address?.cep || '',
-          logradouro: company.address?.street || '',
-          numero: company.address?.number || '',
-          complemento: company.address?.complement || '',
-          bairro: company.address?.neighborhood || '',
-          cidade: company.address?.city || '',
-          estado: company.address?.state || 'SP'
-        }));
-      }
+      (async () => {
+        try {
+          const response = await companiesService.getById(Number(companyId));
+          const company = response.data?.company || response.data;
+          if (!company) return;
+
+          setFormData(prev => ({
+            ...prev,
+            name: company.name || '',
+            razaoSocial: company.description || '',
+            cnpj: company.cnpj || '',
+            responsavel: company.responsible_name || '',
+            email: company.responsible_email || '',
+            telefone: company.responsible_phone || '',
+            royaltyPercent: Number(company.royalty_percent || 15),
+            status: company.status || 'pending',
+            cep: company.address_cep || '',
+            logradouro: company.address_street || '',
+            numero: company.address_number || '',
+            complemento: company.address_complement || '',
+            bairro: company.address_neighborhood || '',
+            cidade: company.address_city || '',
+            estado: company.address_state || 'SP'
+          }));
+        } catch (err) {
+          console.error('Erro ao carregar empresa:', err);
+          showFeedback('error', 'Nao foi possivel carregar os dados da empresa.');
+        }
+      })();
     }
-  }, [companyId]);
+  }, [companyId, showFeedback]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -79,49 +89,43 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
     setLoading(true);
-    // Simulando delay de API
-    setTimeout(() => {
-      try {
-        const companies = storage.get<Company[]>('admin_companies', []);
-        
-        const companyData: Company = {
-          id: companyId || Date.now().toString(),
-          name: formData.name,
-          cnpj: formData.cnpj,
-          rating: companyId ? (companies.find(c => c.id === companyId)?.rating || 0) : 0,
-          distance: companyId ? (companies.find(c => c.id === companyId)?.distance || '0km') : '0km',
-          logo: companyId ? (companies.find(c => c.id === companyId)?.logo || `https://picsum.photos/200?random=${Math.random()}`) : `https://picsum.photos/200?random=${Math.random()}`,
-          status: formData.status,
-          royaltyPercent: formData.royaltyPercent,
-          address: {
-            cep: formData.cep,
-            street: formData.logradouro,
-            number: formData.numero,
-            complement: formData.complemento,
-            neighborhood: formData.bairro,
-            city: formData.cidade,
-            state: formData.estado
-          }
-        };
+    try {
+      const payload: Record<string, any> = {
+        name: formData.name,
+        cnpj: formData.cnpj.replace(/\D/g, ''),
+        responsavel: formData.responsavel,
+        email: formData.email,
+        telefone: formData.telefone.replace(/\D/g, ''),
+        address_cep: formData.cep.replace(/\D/g, ''),
+        address_street: formData.logradouro,
+        address_number: formData.numero,
+        address_complement: formData.complemento,
+        address_neighborhood: formData.bairro,
+        address_city: formData.cidade,
+        address_state: formData.estado,
+        description: formData.razaoSocial
+      };
 
-        if (companyId) {
-          storage.set('admin_companies', companies.map(c => c.id === companyId ? companyData : c));
-        } else {
-          storage.set('admin_companies', [...companies, companyData]);
-        }
-        
-        setLoading(false);
-        showFeedback('success', 'Dados da empresa salvos!');
-        setTimeout(onBack, 1500);
-      } catch (err) {
-        setLoading(false);
-        showFeedback('error', 'Erro ao salvar os dados.');
+      if (companyId) {
+        payload.status = formData.status;
+        payload.royalty_percent = formData.royaltyPercent;
+        await companiesService.update(Number(companyId), payload);
+        showFeedback('success', 'Dados da empresa atualizados!');
+      } else {
+        await companiesService.create(payload);
+        showFeedback('success', 'Empresa cadastrada. Convite enviado por e-mail!');
       }
-    }, 800);
+
+      setTimeout(onBack, 1200);
+    } catch (err: any) {
+      showFeedback('error', err.response?.data?.message || 'Erro ao salvar os dados.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const SectionTitle = ({ icon: Icon, title }: { icon: any, title: string }) => (
@@ -247,10 +251,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
                 onChange={e => setFormData({...formData, estado: e.target.value})}
                 className="w-full px-5 py-3 bg-gray-50 rounded-2xl mt-1 border-2 border-transparent focus:bg-white"
               >
-                <option value="SP">São Paulo</option>
-                <option value="RJ">Rio de Janeiro</option>
-                <option value="MG">Minas Gerais</option>
-                <option value="PR">Paraná</option>
+                <option value="RO" selected>Rondônia</option>
               </select>
             </div>
           </div>

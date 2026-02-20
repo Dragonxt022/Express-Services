@@ -1,4 +1,4 @@
-
+﻿
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPRESA = 'EMPRESA',
@@ -21,6 +21,9 @@ export interface Address {
   city: string;
   state: string;
   isDefault: boolean;
+  neighborhood?: string;
+  zipCode?: string;
+  complement?: string;
 }
 
 export interface PaymentCard {
@@ -136,3 +139,4 @@ export interface KPI {
   change: string;
   trend: 'up' | 'down';
 }
+

@@ -28,6 +28,8 @@ import Notifications from './pages/Notifications';
 import AppLauncher from './pages/AppLauncher';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import RegisterSuccess from './pages/auth/RegisterSuccess';
+import CompanyInviteSetup from './pages/auth/CompanyInviteSetup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import Onboarding from './pages/auth/Onboarding';
 import Concierge from './components/Concierge';
@@ -35,11 +37,14 @@ import { User, UserRole, Service, Company } from './types';
 import { COLORS } from './constants';
 import { storage } from './utils/storage';
 import { FeedbackProvider } from './context/FeedbackContext';
+import { authService } from './services/api';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeView, setActiveView] = useState('launcher');
-  const [authView, setAuthView] = useState<'welcome' | 'login' | 'register' | 'forgot_password' | 'onboarding'>('welcome');
+  const [authView, setAuthView] = useState<'welcome' | 'login' | 'register' | 'verify_email' | 'company_invite_setup' | 'forgot_password' | 'onboarding'>('welcome');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string>('');
+  const [companyInviteToken, setCompanyInviteToken] = useState<string>('');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartServices, setCartServices] = useState<Service[]>([]);
@@ -52,12 +57,47 @@ const App: React.FC = () => {
       });
     }
 
-    const savedUser = storage.get<User | null>('session', null);
-    const savedToken = storage.get<string>('token', null);
-    if (savedUser && savedToken) {
-      setCurrentUser(savedUser);
-      setActiveView(savedUser.role === UserRole.CLIENTE ? 'explore' : 'launcher');
-    }
+    const bootstrapAuth = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const verificationToken = params.get('email_verify_token');
+      const inviteToken = params.get('company_invite_token');
+
+      if (inviteToken) {
+        setCompanyInviteToken(inviteToken);
+        setAuthView('company_invite_setup');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+
+      if (verificationToken) {
+        try {
+          const response = await authService.verifyEmail(verificationToken);
+          if (response.data?.success && response.data?.token && response.data?.user) {
+            const roleMap: Record<string, UserRole> = {
+              CLIENTE: UserRole.CLIENTE,
+              EMPRESA: UserRole.EMPRESA,
+              ADMIN: UserRole.ADMIN
+            };
+            const mappedRole = roleMap[response.data.user.role] || UserRole.CLIENTE;
+            handleLogin(mappedRole, response.data.token, response.data.user);
+          }
+        } catch (error) {
+          console.error('Erro ao confirmar e-mail:', error);
+        } finally {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        return;
+      }
+
+      const savedUser = storage.get<User | null>('session', null);
+      const savedToken = storage.get<string>('token', null);
+      if (savedUser && savedToken) {
+        setCurrentUser(savedUser);
+        setActiveView(savedUser.role === UserRole.CLIENTE ? 'explore' : 'launcher');
+      }
+    };
+
+    bootstrapAuth();
   }, []);
 
   const handleLogin = (role: UserRole, token: string, userData: any) => {
@@ -179,7 +219,36 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} onNavigate={setAuthView} />;
       }
       if (authView === 'register') {
-        return <Register onBack={() => setAuthView('login')} onSuccess={() => setAuthView('onboarding')} />;
+        return (
+          <Register
+            onBack={() => setAuthView('login')}
+            onSuccess={(email) => {
+              setPendingVerificationEmail(email || '');
+              setAuthView('verify_email');
+            }}
+          />
+        );
+      }
+      if (authView === 'verify_email') {
+        return (
+          <RegisterSuccess
+            email={pendingVerificationEmail}
+            onBackToLogin={() => setAuthView('login')}
+          />
+        );
+      }
+      if (authView === 'company_invite_setup' && companyInviteToken) {
+        return (
+          <CompanyInviteSetup
+            token={companyInviteToken}
+            onActivated={(role, token, userData) => {
+              handleLogin(role, token, userData);
+              if (role === UserRole.EMPRESA) {
+                setActiveView('dashboard');
+              }
+            }}
+          />
+        );
       }
       if (authView === 'onboarding') {
         return <Onboarding onComplete={() => setAuthView('login')} />;
@@ -200,12 +269,7 @@ const App: React.FC = () => {
             <div className="space-y-4 relative z-10">
                <button onClick={() => setAuthView('login')} className="w-full py-6 rounded-[1.8rem] font-black text-white shadow-xl shadow-rose-100 text-lg hover:scale-[1.02] transition-all active:scale-95" style={{ backgroundColor: COLORS.primary }}>Entrar na Conta</button>
                <button onClick={() => setAuthView('register')} className="w-full py-5 rounded-[1.8rem] font-bold bg-slate-100 text-gray-800 hover:bg-slate-200 transition-all">Criar Nova Conta</button>
-               
-               <div className="pt-8">
-                 <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-4">Contas de Teste</p>
-                 <p className="text-[9px] text-gray-400 mb-4">Email: gabriel@email.com | Senha: 123456</p>
-                 <p className="text-[9px] text-gray-400">Email: contato@elegance.com | Senha: 123456</p>
-               </div>
+              
             </div>
             <p className="mt-12 text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em]">v1.2.0 Enhanced Flow</p>
           </div>

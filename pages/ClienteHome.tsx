@@ -307,7 +307,7 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
                     <h4 className="font-black text-gray-900 text-lg tracking-tight group-hover:text-[#E11D48] transition-colors mb-1">{company.name}</h4>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1 text-gray-400 text-[9px] font-black uppercase tracking-widest">
-                        <MapPin size={10} /> {company.city || 'São Paulo'}
+                        <MapPin size={10} /> {company.city || 'Rondônia'}
                       </div>
                       <div className="flex items-center gap-1 text-[#E11D48] text-[9px] font-black uppercase tracking-widest">
                         <Clock size={10} /> Aberto

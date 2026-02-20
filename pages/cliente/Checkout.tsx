@@ -1,8 +1,10 @@
-
+﻿
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Zap, ShieldCheck, ArrowRight, ArrowLeft, CheckCircle2, QrCode, Copy, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { ordersService } from '../../services/api';
+import { storage } from '../../utils/storage';
+import { validateCoupon } from '../../utils/customerData';
 
 interface CheckoutProps {
   onConfirm: () => void;
@@ -31,7 +33,7 @@ const PixModal: React.FC<{ onConfirm: () => void, onCancel: () => void, price: n
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText('00020126580014BR.GOV.BCB.PIX0136be-express-uuid-v4-payment-key-2024');
-    showFeedback('success', 'Código Pix copiado!');
+    showFeedback('success', 'CÃ³digo Pix copiado!');
   };
 
   const handlePaid = () => {
@@ -70,7 +72,7 @@ const PixModal: React.FC<{ onConfirm: () => void, onCancel: () => void, price: n
         </div>
 
         <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Pague com Pix</h2>
-        <p className="text-gray-400 text-xs font-medium mb-8">Escaneie o código acima ou copie o código abaixo para pagar.</p>
+        <p className="text-gray-400 text-xs font-medium mb-8">Escaneie o cÃ³digo acima ou copie o cÃ³digo abaixo para pagar.</p>
 
         <button 
           onClick={handleCopyPix}
@@ -92,7 +94,7 @@ const PixModal: React.FC<{ onConfirm: () => void, onCancel: () => void, price: n
                 Validando...
               </>
             ) : (
-              'Já realizei o pagamento'
+              'JÃ¡ realizei o pagamento'
             )}
           </button>
           <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.2em]">Pagamento via Mercado Pago Split</p>
@@ -109,10 +111,41 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPixModal, setShowPixModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
+  const [discount, setDiscount] = useState(0);
 
   const subtotal = services.reduce((acc, s) => acc + s.price, 0);
-  const discount = 10;
-  const total = subtotal - discount;
+  const total = Math.max(0, subtotal - discount);
+
+  const getCurrentUserId = () => {
+    const sessionUser = storage.get<{ id?: string | number } | null>('session', null);
+    const numericId = Number(sessionUser?.id);
+    return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
+  };
+
+  const handleApplyCoupon = () => {
+    const result = validateCoupon(couponCode, subtotal);
+    if (!result.valid) {
+      setAppliedCouponCode(null);
+      setDiscount(0);
+      setError(result.message || 'Nao foi possivel aplicar o cupom.');
+      showFeedback('error', result.message || 'Cupom invalido.');
+      return;
+    }
+
+    setError(null);
+    setAppliedCouponCode(result.coupon?.code || couponCode.trim().toUpperCase());
+    setDiscount(result.discount);
+    showFeedback('success', `Cupom aplicado: ${result.coupon?.code || couponCode.trim().toUpperCase()}`);
+  };
+
+  const removeCoupon = () => {
+    setCouponCode('');
+    setAppliedCouponCode(null);
+    setDiscount(0);
+    setError(null);
+  };
 
   const handlePayment = async () => {
     try {
@@ -125,15 +158,26 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
 
       setIsProcessing(true);
 
-      // Criar pedido via API
+      const customerId = getCurrentUserId();
+      if (!customerId) {
+        setError('Sessão inválida. Faça login novamente para continuar.');
+        showFeedback('error', 'Sessão inválida. Faça login novamente.');
+        return;
+      }
+
+      const companyId = Number(bookingDetails.company?.id);
+      const serviceIds = services
+        .map((s) => Number(s.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
       const orderData = {
-        customer_id: 1, // Seria do usuário logado
-        company_id: bookingDetails.company?.id || 1,
-        services: services.map(s => s.id),
+        customer_id: customerId,
+        company_id: Number.isFinite(companyId) && companyId > 0 ? companyId : 1,
+        services: serviceIds,
         total_price: subtotal,
         discount: discount,
         payment_method: 'credit_card',
-        status: 'confirmed'
+        status: 'confirmed',
+        notes: appliedCouponCode ? `Cupom aplicado: ${appliedCouponCode}` : undefined
       };
 
       const response = await ordersService.create(orderData);
@@ -195,18 +239,50 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
         </div>
 
         <div className="mb-4 pb-4 border-b border-gray-50">
-           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Local e Horário</p>
+           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Local e HorÃ¡rio</p>
            <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-gray-800">
-                {bookingDetails.location === 'domicilio' ? 'A Domicílio' : 'Presencial'}
+                {bookingDetails.location === 'domicilio' ? 'A DomicÃ­lio' : 'Presencial'}
               </p>
               <p className="text-[10px] font-black text-pink-600 uppercase">
-                {new Date(bookingDetails.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} • {bookingDetails.time}
+                {new Date(bookingDetails.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} â€¢ {bookingDetails.time}
               </p>
            </div>
            {bookingDetails.location === 'domicilio' && (
              <p className="text-[9px] text-gray-400 mt-1">{bookingDetails.address?.street}, {bookingDetails.address?.number}</p>
            )}
+        </div>
+
+        <div className="mb-4 pb-4 border-b border-gray-50">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Cupom</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              placeholder="Digite seu cupom"
+              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-pink-500"
+            />
+            <button
+              onClick={handleApplyCoupon}
+              type="button"
+              className="px-4 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+            >
+              Aplicar
+            </button>
+          </div>
+          {appliedCouponCode && (
+            <div className="mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+              <p className="text-emerald-700 text-[10px] font-black uppercase tracking-widest">{appliedCouponCode}</p>
+              <button
+                type="button"
+                onClick={removeCoupon}
+                className="text-emerald-700 text-[10px] font-black uppercase tracking-widest"
+              >
+                Remover
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -215,7 +291,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
             <span>R$ {subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-xs font-bold text-green-500">
-            <span>Desconto (BEM-VINDO)</span>
+            <span>Desconto {appliedCouponCode ? `(${appliedCouponCode})` : ''}</span>
             <span>- R$ {discount.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-end pt-4 border-t border-gray-50">
@@ -226,7 +302,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Escolha o Método</h3>
+        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Escolha o MÃ©todo</h3>
         
         <button 
           onClick={() => setMethod('card')}
@@ -239,7 +315,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
               <CreditCard size={20} />
             </div>
             <div>
-              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">Cartão de Crédito</p>
+              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">CartÃ£o de CrÃ©dito</p>
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Visa Final 4432</p>
             </div>
           </div>
@@ -257,8 +333,8 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
               <QrCode size={20} />
             </div>
             <div>
-              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">Pix (Split Instantâneo)</p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Confirmação em tempo real</p>
+              <p className="font-bold text-gray-900 leading-none mb-1 text-sm">Pix (Split InstantÃ¢neo)</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">ConfirmaÃ§Ã£o em tempo real</p>
             </div>
           </div>
           {method === 'pix' && <div className="w-4 h-4 bg-[#E11D48] rounded-full border-2 border-white shadow-sm"></div>}
@@ -268,7 +344,7 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
       <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-gray-100 flex items-center gap-4 mb-4">
         <ShieldCheck className="text-[#E11D48]" size={32} />
         <p className="text-xs font-medium text-gray-500 leading-tight">
-          Suas informações estão seguras. O pagamento será processado e o agendamento confirmado imediatamente.
+          Suas informaÃ§Ãµes estÃ£o seguras. O pagamento serÃ¡ processado e o agendamento confirmado imediatamente.
         </p>
       </div>
 
@@ -299,3 +375,6 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
 };
 
 export default Checkout;
+
+
+

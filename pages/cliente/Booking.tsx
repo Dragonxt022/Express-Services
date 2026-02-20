@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect } from 'react';
 import { 
   Scissors, User, Calendar as CalendarIcon, Clock, 
@@ -6,10 +6,10 @@ import {
   CalendarDays, UserCheck, Sparkles, ArrowRight, Home, Building2, Plus, Loader, AlertCircle
 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
-import { storage } from '../../utils/storage';
 import { teamMembersService } from '../../services/api';
 import { TeamMember, Service, Company, Address } from '../../types';
 import AddressForm from './AddressForm';
+import { getCustomerAddresses, saveCustomerAddresses } from '../../utils/customerData';
 
 interface BookingProps {
   services: Service[];
@@ -23,16 +23,11 @@ const TIME_SLOTS = [
   '14:00', '14:30', '15:00', '15:30', '16:00', '17:00'
 ];
 
-const mockAddresses: Address[] = [
-  { id: '1', label: 'Casa', street: 'Rua das Flores', number: '123', city: 'São Paulo', state: 'SP', isDefault: true },
-  { id: '2', label: 'Trabalho', street: 'Av. Paulista', number: '1000', city: 'São Paulo', state: 'SP', isDefault: false },
-];
-
 const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, onBack }) => {
   const { showFeedback } = useFeedback();
   const [step, setStep] = useState(0); 
   const [selectedLocation, setSelectedLocation] = useState<'presencial' | 'domicilio' | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>(mockAddresses);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -46,7 +41,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
     { id: 'location', label: 'Onde?' },
     { id: 'date', label: 'Quando?' },
     { id: 'pro', label: 'Com quem?' },
-    { id: 'review', label: 'Revisão' }
+    { id: 'review', label: 'RevisÃ£o' }
   ];
 
   useEffect(() => {
@@ -55,6 +50,13 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
     }
   }, [step, initialCompany]);
 
+  useEffect(() => {
+    const customerAddresses = getCustomerAddresses();
+    setAddresses(customerAddresses);
+    const defaultAddress = customerAddresses.find((addr) => addr.isDefault) || customerAddresses[0];
+    setSelectedAddress(defaultAddress || null);
+  }, []);
+
   const loadProfessionals = async () => {
     try {
       setLoadingPros(true);
@@ -62,7 +64,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       const response = await teamMembersService.getByCompany(initialCompany?.id || 1);
       setProfessionals(response.data || []);
       if (!response.data || response.data.length === 0) {
-        setErrorPros('Nenhum profissional disponível');
+        setErrorPros('Nenhum profissional disponÃ­vel');
       }
     } catch (err: any) {
       console.error('Erro ao carregar profissionais:', err);
@@ -77,10 +79,10 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       return showFeedback('error', 'Selecione o local de atendimento.');
     }
     if (step === 0 && selectedLocation === 'domicilio' && !selectedAddress) {
-      return showFeedback('error', 'Selecione um endereço para o atendimento.');
+      return showFeedback('error', 'Selecione um endereÃ§o para o atendimento.');
     }
     if (step === 1 && (!selectedDate || !selectedTime)) {
-      return showFeedback('error', 'Selecione a data e o horário.');
+      return showFeedback('error', 'Selecione a data e o horÃ¡rio.');
     }
     if (step === 2 && !selectedPro) {
       return showFeedback('error', 'Selecione um profissional.');
@@ -105,11 +107,16 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
   const cartDuration = services.reduce((acc, s) => acc + s.duration, 0);
 
   const handleSaveNewAddress = (newAddr: Partial<Address>) => {
-    const addr = newAddr as Address;
-    setAddresses([...addresses, addr]);
+    const addr = {
+      ...(newAddr as Address),
+      id: newAddr.id ? String(newAddr.id) : Date.now().toString(),
+      isDefault: addresses.length === 0
+    };
+    const updatedAddresses = saveCustomerAddresses([...addresses, addr]);
+    setAddresses(updatedAddresses);
     setSelectedAddress(addr);
     setIsAddingAddress(false);
-    showFeedback('success', 'Endereço adicionado!');
+    showFeedback('success', 'Endereco adicionado!');
   };
 
   if (isAddingAddress) {
@@ -154,7 +161,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       {/* STEP 0: LOCAL DE ATENDIMENTO */}
       {step === 0 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
-          <StepHeader title="Onde?" desc="Escolha o local de sua preferência" />
+          <StepHeader title="Onde?" desc="Escolha o local de sua preferÃªncia" />
           
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -169,7 +176,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                 </div>
                 <div>
                   <h4 className="font-black text-lg leading-none mb-1">Presencial</h4>
-                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'presencial' ? 'text-slate-400' : 'text-gray-400'}`}>Vou até a empresa</p>
+                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'presencial' ? 'text-slate-400' : 'text-gray-400'}`}>Vou atÃ© a empresa</p>
                 </div>
               </button>
 
@@ -183,8 +190,8 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                   <Home size={24} />
                 </div>
                 <div>
-                  <h4 className="font-black text-lg leading-none mb-1">A Domicílio</h4>
-                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'domicilio' ? 'text-slate-400' : 'text-gray-400'}`}>A especialista vem até mim</p>
+                  <h4 className="font-black text-lg leading-none mb-1">A DomicÃ­lio</h4>
+                  <p className={`text-[9px] font-bold uppercase tracking-widest ${selectedLocation === 'domicilio' ? 'text-slate-400' : 'text-gray-400'}`}>A especialista vem atÃ© mim</p>
                 </div>
               </button>
             </div>
@@ -193,34 +200,42 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
               <div className="animate-in slide-in-from-top-4 duration-500 space-y-4 pt-4">
                 <div className="flex items-center gap-2 px-2">
                   <MapPin size={16} className="text-pink-600" />
-                  <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Selecione o Endereço</h4>
+                  <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Selecione o EndereÃ§o</h4>
                 </div>
                 <div className="space-y-3">
-                  {addresses.map(addr => (
-                    <button 
-                      key={addr.id}
-                      onClick={() => setSelectedAddress(addr)}
-                      className={`w-full p-5 rounded-2xl border-2 transition-all flex items-center justify-between ${
-                        selectedAddress?.id === addr.id ? 'bg-pink-50 border-pink-600 text-pink-600' : 'bg-white border-gray-50 text-gray-500 hover:border-pink-100'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedAddress?.id === addr.id ? 'bg-pink-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
-                          <MapPin size={20} />
+                  {addresses.length > 0 ? (
+                    addresses.map(addr => (
+                      <button 
+                        key={addr.id}
+                        onClick={() => setSelectedAddress(addr)}
+                        className={`w-full p-5 rounded-2xl border-2 transition-all flex items-center justify-between ${
+                          selectedAddress?.id === addr.id ? 'bg-pink-50 border-pink-600 text-pink-600' : 'bg-white border-gray-50 text-gray-500 hover:border-pink-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedAddress?.id === addr.id ? 'bg-pink-600 text-white' : 'bg-gray-50 text-gray-400'}`}>
+                            <MapPin size={20} />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-black text-sm leading-none mb-1">{addr.label}</p>
+                            <p className="text-[10px] font-bold opacity-70">{addr.street}, {addr.number}</p>
+                          </div>
                         </div>
-                        <div className="text-left">
-                          <p className="font-black text-sm leading-none mb-1">{addr.label}</p>
-                          <p className="text-[10px] font-bold opacity-70">{addr.street}, {addr.number}</p>
-                        </div>
-                      </div>
-                      {selectedAddress?.id === addr.id && <CheckCircle2 size={20} />}
-                    </button>
-                  ))}
+                        {selectedAddress?.id === addr.id && <CheckCircle2 size={20} />}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                      <p className="text-amber-700 text-xs font-semibold">
+                        Nenhum endereco salvo na sua conta. Adicione um endereco para continuar.
+                      </p>
+                    </div>
+                  )}
                   <button 
                     onClick={() => setIsAddingAddress(true)}
                     className="w-full p-5 rounded-2xl border-2 border-dashed border-gray-100 text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 transition-all"
                   >
-                    <Plus size={20} /> <span className="text-xs font-black uppercase tracking-widest">Novo Endereço</span>
+                    <Plus size={20} /> <span className="text-xs font-black uppercase tracking-widest">Novo EndereÃ§o</span>
                   </button>
                 </div>
               </div>
@@ -243,7 +258,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
           <button onClick={() => setStep(0)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
             <ArrowLeft size={14} /> Voltar para local
           </button>
-          <StepHeader title="Data & Horário" desc={services.length === 1 ? services[0].name : `${services.length} serviços selecionados`} />
+          <StepHeader title="Data & HorÃ¡rio" desc={services.length === 1 ? services[0].name : `${services.length} serviÃ§os selecionados`} />
           
           <div className="space-y-8">
             {/* Seletor de Datas Horizontal */}
@@ -267,11 +282,11 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
               })}
             </div>
 
-            {/* Grid de Horários */}
+            {/* Grid de HorÃ¡rios */}
             <div>
               <div className="flex items-center gap-2 mb-4 px-2">
                  <Clock size={16} className="text-pink-600" />
-                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Horários Disponíveis</h4>
+                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">HorÃ¡rios DisponÃ­veis</h4>
               </div>
               <div className="grid grid-cols-4 gap-3">
                 {TIME_SLOTS.map(time => (
@@ -302,9 +317,9 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       {step === 2 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
           <button onClick={() => setStep(1)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
-            <ArrowLeft size={14} /> Voltar para horários
+            <ArrowLeft size={14} /> Voltar para horÃ¡rios
           </button>
-          <StepHeader title="Com Quem?" desc="Escolha a especialista de sua preferência" />
+          <StepHeader title="Com Quem?" desc="Escolha a especialista de sua preferÃªncia" />
           
           {loadingPros ? (
             <div className="flex flex-col items-center justify-center py-20">
@@ -356,20 +371,20 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
               </div>
             </div>
           ) : (
-            <p className="text-gray-400 text-center py-8">Nenhum profissional disponível</p>
+            <p className="text-gray-400 text-center py-8">Nenhum profissional disponÃ­vel</p>
           )}
         </section>
       )}
 
-      {/* STEP 3: REVISÃO FINAL */}
+      {/* STEP 3: REVISÃƒO FINAL */}
       {step === 3 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
           <button onClick={() => setStep(2)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest"><ArrowLeft size={14} /> Voltar</button>
-          <StepHeader title="Quase lá!" desc="Confira todos os detalhes do seu brilho" />
+          <StepHeader title="Quase lÃ¡!" desc="Confira todos os detalhes do seu brilho" />
                     <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100 mb-6 space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50 blur-3xl rounded-full -mr-16 -mt-16"></div>
             
-            {/* Serviço e Empresa */}
+            {/* ServiÃ§o e Empresa */}
             <div className="flex flex-col gap-3 pb-6 border-b border-gray-50 relative z-10">
                <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-pink-600 shadow-inner">
@@ -378,7 +393,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                   <div>
                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-1.5">{initialCompany?.name}</p>
                      <h4 className="font-black text-gray-900 text-xl leading-none mb-1">
-                       {services.length === 1 ? services[0].name : `${services.length} Serviços`}
+                       {services.length === 1 ? services[0].name : `${services.length} ServiÃ§os`}
                      </h4>
                      <span className="text-[9px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full uppercase">{cartDuration} min de cuidado</span>
                   </div>
@@ -392,7 +407,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                )}
             </div>
 
-            {/* Local e Endereço */}
+            {/* Local e EndereÃ§o */}
             <div className="pb-8 border-b border-gray-50 relative z-10">
                <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
@@ -401,7 +416,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                   <div>
                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Local de Atendimento</p>
                      <p className="text-sm font-bold text-gray-800">
-                       {selectedLocation === 'domicilio' ? `A Domicílio: ${selectedAddress?.label}` : 'Presencial na Empresa'}
+                       {selectedLocation === 'domicilio' ? `A DomicÃ­lio: ${selectedAddress?.label}` : 'Presencial na Empresa'}
                      </p>
                      {selectedLocation === 'domicilio' && (
                        <p className="text-[10px] text-gray-400 font-medium">{selectedAddress?.street}, {selectedAddress?.number}</p>
@@ -428,7 +443,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                   </div>
                   <div>
                      <p className="font-black text-gray-900 text-lg leading-none">{selectedDate ? new Date(selectedDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''}</p>
-                     <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1.5"><Clock size={12} /> às {selectedTime}</p>
+                     <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1.5"><Clock size={12} /> Ã s {selectedTime}</p>
                   </div>
                </div>
             </div>
@@ -459,3 +474,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
 };
 
 export default Booking;
+
+
+
+
