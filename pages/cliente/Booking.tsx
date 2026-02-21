@@ -1,12 +1,12 @@
 ﻿
 import React, { useState, useEffect } from 'react';
 import { 
-  Scissors, User, Calendar as CalendarIcon, Clock, 
-  ChevronRight, ArrowLeft, Star, MapPin, CheckCircle2,
+  Scissors, User, Clock, 
+  ChevronRight, ArrowLeft, MapPin, CheckCircle2,
   CalendarDays, UserCheck, Sparkles, ArrowRight, Home, Building2, Plus, Loader, AlertCircle
 } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
-import { teamMembersService } from '../../services/api';
+import { appointmentsService, teamMembersService } from '../../services/api';
 import { TeamMember, Service, Company, Address } from '../../types';
 import AddressForm from './AddressForm';
 import { getCustomerAddresses, saveCustomerAddresses } from '../../utils/customerData';
@@ -26,6 +26,7 @@ const TIME_SLOTS = [
 const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, onBack }) => {
   const { showFeedback } = useFeedback();
   const [step, setStep] = useState(0); 
+  const [bookingMode, setBookingMode] = useState<'scheduled' | 'immediate'>('scheduled');
   const [selectedLocation, setSelectedLocation] = useState<'presencial' | 'domicilio' | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -36,19 +37,67 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
   const [professionals, setProfessionals] = useState<TeamMember[]>([]);
   const [loadingPros, setLoadingPros] = useState(false);
   const [errorPros, setErrorPros] = useState<string | null>(null);
+  const [availabilitySlots, setAvailabilitySlots] = useState<Array<{ time: string; available: boolean; busyProfessionals: number[]; totalProfessionals: number }>>([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
 
-  const steps = [
-    { id: 'location', label: 'Onde?' },
-    { id: 'date', label: 'Quando?' },
-    { id: 'pro', label: 'Com quem?' },
-    { id: 'review', label: 'RevisÃ£o' }
-  ];
+  const canSchedule = services.every((service) => service.allowScheduling !== false);
+  const locationPolicy = services.reduce(
+    (acc, service) => {
+      const mode = service.attendanceMode || 'ambos';
+      if (mode === 'presencial') acc.domicilio = false;
+      if (mode === 'domicilio') acc.presencial = false;
+      return acc;
+    },
+    { presencial: true, domicilio: true }
+  );
+  const cartDuration = services.reduce((acc, s) => acc + s.duration, 0);
+  const cartBuffer = services.reduce((acc, s) => acc + Number((s as any).preparationTime || 0), 0);
+  const requestedWindowMin = Math.max(1, cartDuration + cartBuffer);
+
+  const showDateStep = bookingMode === 'scheduled';
+  const proStepIndex = showDateStep ? 2 : 1;
+  const reviewStepIndex = showDateStep ? 3 : 2;
+  const steps = showDateStep
+    ? [
+        { id: 'location', label: 'Onde?' },
+        { id: 'date', label: 'Quando?' },
+        { id: 'pro', label: 'Com quem?' },
+        { id: 'review', label: 'Revisao' }
+      ]
+    : [
+        { id: 'location', label: 'Onde?' },
+        { id: 'pro', label: 'Com quem?' },
+        { id: 'review', label: 'Revisao' }
+      ];
 
   useEffect(() => {
-    if (step === 2 && initialCompany) {
+    if (initialCompany) {
       loadProfessionals();
     }
-  }, [step, initialCompany]);
+  }, [initialCompany?.id]);
+
+  useEffect(() => {
+    if (step === proStepIndex && initialCompany && professionals.length === 0 && !loadingPros) {
+      loadProfessionals();
+    }
+  }, [step, initialCompany, proStepIndex, professionals.length, loadingPros]);
+
+  useEffect(() => {
+    if (!initialCompany?.id || !selectedDate) return;
+    loadAvailability(selectedDate, selectedPro?.id ? String(selectedPro.id) : undefined);
+  }, [initialCompany?.id, selectedDate, selectedPro?.id, requestedWindowMin]);
+
+  useEffect(() => {
+    if (!canSchedule) {
+      setBookingMode('immediate');
+    }
+  }, [canSchedule]);
+
+  useEffect(() => {
+    if (selectedLocation && !locationPolicy[selectedLocation]) {
+      setSelectedLocation(null);
+    }
+  }, [selectedLocation, locationPolicy]);
 
   useEffect(() => {
     const customerAddresses = getCustomerAddresses();
@@ -62,8 +111,9 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       setLoadingPros(true);
       setErrorPros(null);
       const response = await teamMembersService.getByCompany(initialCompany?.id || 1);
-      setProfessionals(response.data || []);
-      if (!response.data || response.data.length === 0) {
+      const professionalsData = response.data?.teamMembers || response.data || [];
+      setProfessionals(professionalsData);
+      if (!professionalsData || professionalsData.length === 0) {
         setErrorPros('Nenhum profissional disponÃ­vel');
       }
     } catch (err: any) {
@@ -74,26 +124,80 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
     }
   };
 
+  const loadAvailability = async (date: string, professionalId?: string) => {
+    try {
+      if (!initialCompany?.id) return;
+      setLoadingAvailability(true);
+      const response = await appointmentsService.getAvailability({
+        companyId: Number(initialCompany.id),
+        date,
+        professionalId: professionalId || undefined,
+        durationMin: cartDuration,
+        bufferMin: cartBuffer
+      });
+      setAvailabilitySlots(response.data?.availability?.slots || []);
+    } catch (_) {
+      setAvailabilitySlots([]);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  const isSlotUnavailable = (date: string | null, time: string) => {
+    if (!date) return false;
+    const slot = availabilitySlots.find((item) => item.time === time);
+    if (!slot) return false;
+    return !slot.available;
+  };
+
+  const isProfessionalUnavailableAtSelectedSlot = (professionalId: string | number) => {
+    if (!selectedDate || !selectedTime) return false;
+    const slot = availabilitySlots.find((item) => item.time === selectedTime);
+    if (!slot) return false;
+    return slot.busyProfessionals.includes(Number(professionalId));
+  };
+
   const handleNext = () => {
     if (step === 0 && !selectedLocation) {
       return showFeedback('error', 'Selecione o local de atendimento.');
     }
+    if (step === 0 && !locationPolicy[selectedLocation as 'presencial' | 'domicilio']) {
+      return showFeedback('error', 'Esse servico nao permite esse local de atendimento.');
+    }
     if (step === 0 && selectedLocation === 'domicilio' && !selectedAddress) {
       return showFeedback('error', 'Selecione um endereÃ§o para o atendimento.');
     }
-    if (step === 1 && (!selectedDate || !selectedTime)) {
+    if (step === 0 && bookingMode === 'immediate') {
+      const today = new Date().toISOString().split('T')[0];
+      const firstAvailable = TIME_SLOTS.find((slot) => !isSlotUnavailable(today, slot));
+      if (!firstAvailable) {
+        return showFeedback('error', 'Nao ha horario imediato disponivel hoje.');
+      }
+      setSelectedDate(today);
+      setSelectedTime(firstAvailable);
+      setStep(proStepIndex);
+      return;
+    }
+    if (showDateStep && step === 1 && (!selectedDate || !selectedTime)) {
       return showFeedback('error', 'Selecione a data e o horÃ¡rio.');
     }
-    if (step === 2 && !selectedPro) {
+    if (showDateStep && step === 1 && isSlotUnavailable(selectedDate, selectedTime || '')) {
+      return showFeedback('error', 'Esse horario ficou indisponivel. Escolha outro.');
+    }
+    if (step === proStepIndex && !selectedPro) {
       return showFeedback('error', 'Selecione um profissional.');
     }
-    setStep(prev => prev + 1);
+    if (step === proStepIndex && selectedPro && isProfessionalUnavailableAtSelectedSlot(selectedPro.id)) {
+      return showFeedback('error', 'Esse profissional esta indisponivel no horario escolhido.');
+    }
+    setStep((prev) => prev + 1);
   };
 
   const handleFinishSelection = () => {
     const bookingDetails = {
       services,
       company: initialCompany,
+      bookingMode,
       location: selectedLocation,
       address: selectedAddress,
       date: selectedDate,
@@ -104,7 +208,6 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
   };
 
   const cartTotal = services.reduce((acc, s) => acc + s.price, 0);
-  const cartDuration = services.reduce((acc, s) => acc + s.duration, 0);
 
   const handleSaveNewAddress = (newAddr: Partial<Address>) => {
     const addr = {
@@ -142,17 +245,17 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
          {steps.map((s, idx) => (
            <div key={s.id} className="flex flex-col items-center flex-1 relative">
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 z-10 ${
-                step > idx + 1 ? 'bg-green-500 text-white' : 
-                step === idx + 1 ? 'bg-slate-900 text-white shadow-xl scale-110' : 
+                step > idx ? 'bg-green-500 text-white' : 
+                step === idx ? 'bg-slate-900 text-white shadow-xl scale-110' : 
                 'bg-gray-100 text-gray-400'
               }`}>
-                {step > idx + 1 ? <CheckCircle2 size={20} /> : <span className="text-sm font-black">{idx + 1}</span>}
+                {step > idx ? <CheckCircle2 size={20} /> : <span className="text-sm font-black">{idx + 1}</span>}
               </div>
-              <span className={`text-[9px] font-black uppercase tracking-widest mt-2 ${step === idx + 1 ? 'text-slate-900' : 'text-gray-300'}`}>
+              <span className={`text-[9px] font-black uppercase tracking-widest mt-2 ${step === idx ? 'text-slate-900' : 'text-gray-300'}`}>
                 {s.label}
               </span>
               {idx < steps.length - 1 && (
-                <div className={`absolute left-1/2 w-full h-[2px] top-5 -z-0 ${step > idx + 1 ? 'bg-green-500' : 'bg-gray-100'}`}></div>
+                <div className={`absolute left-1/2 w-full h-[2px] top-5 -z-0 ${step > idx ? 'bg-green-500' : 'bg-gray-100'}`}></div>
               )}
            </div>
          ))}
@@ -161,15 +264,47 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       {/* STEP 0: LOCAL DE ATENDIMENTO */}
       {step === 0 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
-          <StepHeader title="Onde?" desc="Escolha o local de sua preferÃªncia" />
+          <StepHeader title="Onde?" desc="Escolha como quer ser atendido" />
           
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => canSchedule && setBookingMode('scheduled')}
+                disabled={!canSchedule}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                  bookingMode === 'scheduled'
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-xl'
+                    : 'bg-white border-gray-100 text-gray-900 hover:border-pink-200'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <p className="font-black text-sm leading-none mb-1">Agendar</p>
+                <p className={`text-[9px] font-bold uppercase tracking-widest ${bookingMode === 'scheduled' ? 'text-slate-400' : 'text-gray-400'}`}>
+                  Escolho data e horario
+                </p>
+              </button>
+
+              <button
+                onClick={() => setBookingMode('immediate')}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                  bookingMode === 'immediate'
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-xl'
+                    : 'bg-white border-gray-100 text-gray-900 hover:border-pink-200'
+                }`}
+              >
+                <p className="font-black text-sm leading-none mb-1">Solicitar imediato</p>
+                <p className={`text-[9px] font-bold uppercase tracking-widest ${bookingMode === 'immediate' ? 'text-slate-400' : 'text-gray-400'}`}>
+                  Primeiro horario disponivel
+                </p>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button 
                 onClick={() => setSelectedLocation('presencial')}
+                disabled={!locationPolicy.presencial}
                 className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${
                   selectedLocation === 'presencial' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
-                }`}
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedLocation === 'presencial' ? 'bg-white/10' : 'bg-rose-50 text-pink-600'}`}>
                   <Building2 size={24} />
@@ -182,9 +317,10 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
 
               <button 
                 onClick={() => setSelectedLocation('domicilio')}
+                disabled={!locationPolicy.domicilio}
                 className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${
                   selectedLocation === 'domicilio' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
-                }`}
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedLocation === 'domicilio' ? 'bg-white/10' : 'bg-rose-50 text-pink-600'}`}>
                   <Home size={24} />
@@ -253,7 +389,7 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       )}
 
       {/* STEP 1: DATA E HORA */}
-      {step === 1 && (
+      {showDateStep && step === 1 && (
         <section className="animate-in slide-in-from-right-4 duration-500">
           <button onClick={() => setStep(0)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
             <ArrowLeft size={14} /> Voltar para local
@@ -292,15 +428,32 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                 {TIME_SLOTS.map(time => (
                   <button
                     key={time}
-                    onClick={() => setSelectedTime(time)}
+                    onClick={() => {
+                      if (isSlotUnavailable(selectedDate, time)) {
+                        showFeedback('error', 'Horario indisponivel. Escolha outro horario.');
+                        return;
+                      }
+                      setSelectedTime(time);
+                    }}
+                    disabled={isSlotUnavailable(selectedDate, time)}
                     className={`py-4 rounded-2xl text-xs font-black transition-all border-2 ${
-                      selectedTime === time ? 'bg-pink-600 border-pink-600 text-white shadow-lg' : 'bg-white border-gray-50 text-gray-500 hover:border-pink-200'
+                      isSlotUnavailable(selectedDate, time)
+                        ? 'bg-red-50 border-red-200 text-red-500 cursor-not-allowed'
+                        : selectedTime === time
+                          ? 'bg-pink-600 border-pink-600 text-white shadow-lg'
+                          : 'bg-white border-gray-50 text-gray-500 hover:border-pink-200'
                     }`}
                   >
-                    {time}
+                    <span className="block">{time}</span>
+                    {isSlotUnavailable(selectedDate, time) && (
+                      <span className="block text-[8px] uppercase tracking-widest mt-0.5">Ocupado</span>
+                    )}
                   </button>
                 ))}
               </div>
+              {loadingAvailability && (
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-3 px-2">Atualizando disponibilidade...</p>
+              )}
             </div>
 
             <button 
@@ -314,10 +467,10 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       )}
 
       {/* STEP 2: PROFISSIONAL */}
-      {step === 2 && (
+      {step === proStepIndex && (
         <section className="animate-in slide-in-from-right-4 duration-500">
-          <button onClick={() => setStep(1)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
-            <ArrowLeft size={14} /> Voltar para horÃ¡rios
+          <button onClick={() => setStep(showDateStep ? 1 : 0)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:text-slate-900 transition-colors">
+            <ArrowLeft size={14} /> Voltar
           </button>
           <StepHeader title="Com Quem?" desc="Escolha a especialista de sua preferÃªncia" />
           
@@ -336,9 +489,20 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
               {professionals.map((p) => (
                 <button 
                   key={p.id}
-                  onClick={() => setSelectedPro(p)}
+                  onClick={() => {
+                    if (isProfessionalUnavailableAtSelectedSlot(p.id)) {
+                      showFeedback('error', 'Esse profissional esta indisponivel no horario escolhido.');
+                      return;
+                    }
+                    setSelectedPro(p);
+                  }}
+                  disabled={isProfessionalUnavailableAtSelectedSlot(p.id)}
                   className={`w-full p-6 rounded-[2.5rem] border-2 transition-all flex items-center gap-6 text-left group ${
-                    selectedPro?.id === p.id ? 'bg-slate-900 border-slate-900 text-white shadow-2xl' : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
+                    isProfessionalUnavailableAtSelectedSlot(p.id)
+                      ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                      : selectedPro?.id === p.id
+                        ? 'bg-slate-900 border-slate-900 text-white shadow-2xl'
+                        : 'bg-white border-gray-50 text-gray-900 hover:border-pink-200'
                   }`}
                 >
                   <div className="relative">
@@ -353,6 +517,9 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                     <h4 className="font-black text-xl leading-none mb-1">{p.name}</h4>
                     <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedPro?.id === p.id ? 'text-pink-400' : 'text-pink-600'}`}>{p.role || 'Profissional'}</p>
                     <p className={`text-xs mt-3 line-clamp-1 ${selectedPro?.id === p.id ? 'text-slate-400' : 'text-gray-400'}`}>Esp: {p.specialties || 'Geral'}</p>
+                    {isProfessionalUnavailableAtSelectedSlot(p.id) && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mt-2">Indisponivel neste horario</p>
+                    )}
                   </div>
                   <div className={`p-3 rounded-2xl transition-colors ${selectedPro?.id === p.id ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
                     <ChevronRight size={20} />
@@ -377,9 +544,9 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
       )}
 
       {/* STEP 3: REVISÃƒO FINAL */}
-      {step === 3 && (
+      {step === reviewStepIndex && (
         <section className="animate-in slide-in-from-right-4 duration-500">
-          <button onClick={() => setStep(2)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest"><ArrowLeft size={14} /> Voltar</button>
+          <button onClick={() => setStep(proStepIndex)} className="mb-4 text-gray-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest"><ArrowLeft size={14} /> Voltar</button>
           <StepHeader title="Quase lÃ¡!" desc="Confira todos os detalhes do seu brilho" />
                     <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl shadow-gray-100 mb-6 space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50 blur-3xl rounded-full -mr-16 -mt-16"></div>
@@ -442,8 +609,12 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
                      <CalendarDays size={14} className="text-pink-600" /> Quando
                   </div>
                   <div>
-                     <p className="font-black text-gray-900 text-lg leading-none">{selectedDate ? new Date(selectedDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''}</p>
-                     <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1.5"><Clock size={12} /> Ã s {selectedTime}</p>
+                     <p className="font-black text-gray-900 text-lg leading-none">
+                       {selectedDate ? new Date(selectedDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''}
+                     </p>
+                     <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1.5">
+                       <Clock size={12} /> as {selectedTime} {bookingMode === 'immediate' ? '(imediato)' : ''}
+                     </p>
                   </div>
                </div>
             </div>
@@ -474,7 +645,3 @@ const Booking: React.FC<BookingProps> = ({ services, initialCompany, onConfirm, 
 };
 
 export default Booking;
-
-
-
-

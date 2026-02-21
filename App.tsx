@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import AdminDashboard from './pages/AdminDashboard';
 import Companies from './pages/admin/Companies';
@@ -33,11 +33,15 @@ import CompanyInviteSetup from './pages/auth/CompanyInviteSetup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import Onboarding from './pages/auth/Onboarding';
 import Concierge from './components/Concierge';
+import BrandLogo from './components/BrandLogo';
 import { User, UserRole, Service, Company } from './types';
 import { COLORS } from './constants';
 import { storage } from './utils/storage';
 import { FeedbackProvider } from './context/FeedbackContext';
-import { authService } from './services/api';
+import { authService, companiesService } from './services/api';
+import { mapSseEventToNotification, pushNotification } from './utils/notifications';
+
+const API_BASE = ((import.meta as any).env.VITE_API_URL || 'http://localhost:3000/api').replace('/api', '');
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -49,6 +53,8 @@ const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartServices, setCartServices] = useState<Service[]>([]);
   const [bookingData, setBookingData] = useState<any>(null);
+  const [bookingCompany, setBookingCompany] = useState<Company | null>(null);
+  const seenEventsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -99,6 +105,83 @@ const App: React.FC = () => {
 
     bootstrapAuth();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+
+    let source: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryMs = 1500;
+    let disposed = false;
+
+    const eventKey = (event: any) =>
+      `${event?.type || ''}:${event?.timestamp || ''}:${event?.payload?.id || event?.payload?.order_id || ''}`;
+
+    const connect = async () => {
+      if (disposed) return;
+      try {
+        const params = new URLSearchParams();
+        params.set('userId', String(currentUser.id));
+
+        if (currentUser.role === UserRole.EMPRESA) {
+          try {
+            const settingsRes = await companiesService.getMySettings();
+            const companyId = settingsRes.data?.settings?.companyId;
+            if (companyId) params.set('companyId', String(companyId));
+          } catch (_) {
+            // segue com userId
+          }
+        }
+
+        source = new EventSource(`${API_BASE}/api/events/stream?${params.toString()}`);
+
+        source.onmessage = (rawEvent) => {
+          try {
+            const event = JSON.parse(rawEvent.data);
+            const key = eventKey(event);
+            if (seenEventsRef.current.has(key)) return;
+            seenEventsRef.current.add(key);
+            if (seenEventsRef.current.size > 300) {
+              const first = seenEventsRef.current.values().next().value;
+              if (first) seenEventsRef.current.delete(first);
+            }
+
+            const mapped = mapSseEventToNotification(event, currentUser.role);
+            if (mapped) {
+              pushNotification(mapped);
+            }
+          } catch (_) {
+            // noop
+          }
+        };
+
+        source.onopen = () => {
+          retryMs = 1500;
+        };
+
+        source.onerror = () => {
+          source?.close();
+          if (disposed) return;
+          reconnectTimer = setTimeout(() => {
+            connect();
+          }, retryMs);
+          retryMs = Math.min(retryMs * 2, 12000);
+        };
+      } catch (_) {
+        if (disposed) return;
+        reconnectTimer = setTimeout(() => connect(), retryMs);
+        retryMs = Math.min(retryMs * 2, 12000);
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      source?.close();
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   const handleLogin = (role: UserRole, token: string, userData: any) => {
     const user: User = {
@@ -158,6 +241,10 @@ const App: React.FC = () => {
             onSelectCompany={(id) => { setActiveCompanyId(id); setActiveView('company_details'); }} 
             onSelectCategory={(cat) => { setActiveCategory(cat); setActiveView('explore_results'); }}
             onSearchSubmit={handleSearch}
+            onOpenAppointment={(appointmentId) => {
+              storage.set('history_focus_appointment_id', appointmentId);
+              setActiveView('history');
+            }}
           />
         );
         if (activeView === 'explore_results' && activeCategory) return (
@@ -171,7 +258,7 @@ const App: React.FC = () => {
         if (activeView === 'booking' && cartServices.length > 0) return (
           <Booking 
             services={cartServices}
-            initialCompany={{ name: 'Studio Elegance', id: activeCompanyId || '2' } as Company}
+            initialCompany={bookingCompany || ({ name: 'Empresa', id: activeCompanyId || '0' } as Company)}
             onBack={() => setActiveView('company_details')}
             onConfirm={(details) => {
               setBookingData(details);
@@ -200,7 +287,10 @@ const App: React.FC = () => {
             onBack={() => setActiveView('explore')} 
             cartServices={cartServices}
             onUpdateCart={setCartServices}
-            onProceedToBooking={() => setActiveView('booking')}
+            onProceedToBooking={(company) => {
+              setBookingCompany(company as Company);
+              setActiveView('booking');
+            }}
           />
         );
         break;
@@ -261,11 +351,10 @@ const App: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
           <div className="w-full max-w-md bg-white rounded-[3.5rem] p-12 shadow-2xl text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 blur-3xl rounded-full -mr-16 -mt-16"></div>
-            <div className="w-24 h-24 rounded-[2.5rem] bg-gradient-to-br from-[#E11D48] to-rose-700 flex items-center justify-center text-white mx-auto mb-10 shadow-2xl relative z-10 group hover:rotate-12 transition-transform">
-              <span className="text-4xl font-black tracking-tighter">BE</span>
+            <div className="mx-auto mb-8 flex justify-center relative z-10">
+              <BrandLogo imageClassName="h-24 w-auto" />
             </div>
-            <h1 className="text-4xl font-black text-gray-900 mb-2 tracking-tight">BelezaExpress</h1>
-            <p className="text-gray-400 mb-12 font-semibold uppercase tracking-widest text-[10px]">Premium Marketplace</p>
+            
             <div className="space-y-4 relative z-10">
                <button onClick={() => setAuthView('login')} className="w-full py-6 rounded-[1.8rem] font-black text-white shadow-xl shadow-rose-100 text-lg hover:scale-[1.02] transition-all active:scale-95" style={{ backgroundColor: COLORS.primary }}>Entrar na Conta</button>
                <button onClick={() => setAuthView('register')} className="w-full py-5 rounded-[1.8rem] font-bold bg-slate-100 text-gray-800 hover:bg-slate-200 transition-all">Criar Nova Conta</button>

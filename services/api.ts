@@ -55,7 +55,7 @@ export const companiesService = {
 export const servicesService = {
   getAll: (params?) => api.get('/services', { params }),
   search: (params?) => api.get('/services/search', { params }),
-  getById: (id) => api.get(`/services/${id}`),
+  getById: (id, params?) => api.get(`/services/${id}`, { params }),
   getByCompany: (companyId, params?) => api.get(`/services/company/${companyId}`, { params }),
   getByCategory: (categoryId, params?) => api.get(`/services/category/${categoryId}`, { params }),
   create: (data) => api.post('/services', data),
@@ -66,10 +66,12 @@ export const servicesService = {
 // Agendamentos
 export const appointmentsService = {
   getAll: (params?) => api.get('/appointments', { params }),
+  getAvailability: (params?) => api.get('/appointments/availability', { params }),
   getById: (id) => api.get(`/appointments/${id}`),
   getByCustomer: (customerId, params?) => api.get(`/appointments/customer/${customerId}`, { params }),
   getByCompany: (companyId, params?) => api.get(`/appointments/company/${companyId}`, { params }),
   create: (data) => api.post('/appointments', data),
+  createBlock: (data) => api.post('/appointments/blocks', data),
   update: (id, data) => api.put(`/appointments/${id}`, data),
   updateStatus: (id, status) => api.patch(`/appointments/${id}/status`, { status }),
   delete: (id) => api.delete(`/appointments/${id}`),
@@ -86,6 +88,13 @@ export const ordersService = {
   update: (id, data) => api.put(`/orders/${id}`, data),
   updateStatus: (id, status) => api.patch(`/orders/${id}/status`, { status }),
   delete: (id) => api.delete(`/orders/${id}`),
+};
+
+// Avaliacoes
+export const reviewsService = {
+  getMy: () => api.get('/reviews/me'),
+  getEligibility: (serviceId) => api.get('/reviews/eligibility', { params: { serviceId } }),
+  create: (data) => api.post('/reviews', data),
 };
 
 // Profissionais

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Clock, CreditCard, Share2 } from 'lucide-react';
+import { Save, Clock, CreditCard, Share2, Power } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
 import { companiesService } from '../../services/api';
 
@@ -44,6 +44,7 @@ const EmpresaSettings: React.FC = () => {
   const [businessHours, setBusinessHours] = useState(DEFAULT_BUSINESS_HOURS);
   const [payments, setPayments] = useState(DEFAULT_PAYMENTS);
   const [social, setSocial] = useState(DEFAULT_SOCIAL);
+  const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -64,6 +65,7 @@ const EmpresaSettings: React.FC = () => {
           ...DEFAULT_SOCIAL,
           ...(settings.social || {})
         });
+        setIsOpen(settings.isOpen !== undefined ? Boolean(settings.isOpen) : true);
       } catch (error: any) {
         console.error('Erro ao carregar configuracoes da empresa:', error);
         showFeedback('error', error.response?.data?.message || 'Nao foi possivel carregar as configuracoes.');
@@ -81,7 +83,8 @@ const EmpresaSettings: React.FC = () => {
       await companiesService.updateMySettings({
         businessHours,
         payments,
-        social
+        social,
+        isOpen
       });
       showFeedback('success', 'Configuracoes atualizadas com sucesso!');
     } catch (error: any) {
@@ -131,6 +134,28 @@ const EmpresaSettings: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="md:col-span-2 bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-3 rounded-2xl ${isOpen ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              <Power size={18} />
+            </div>
+            <div>
+              <p className="text-sm font-black text-gray-900">Loja {isOpen ? 'Aberta' : 'Fechada'}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                Controla disponibilidade imediata no app cliente
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+              isOpen ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            {isOpen ? 'Fechar Loja' : 'Abrir Loja'}
+          </button>
+        </section>
+
         <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col h-full">
           <SectionHeader icon={Clock} title="Expediente" desc="Horarios de Atendimento" />
           <div className="space-y-3 flex-1">

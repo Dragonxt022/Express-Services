@@ -65,6 +65,7 @@ export interface Company {
   distance: string;
   logo: string;
   status: 'active' | 'inactive' | 'pending';
+  isOpen?: boolean;
   royaltyPercent: number;
   address?: {
     cep: string;
@@ -85,6 +86,8 @@ export interface Service {
   price: number;
   duration: number;
   preparationTime: number;
+  attendanceMode?: 'presencial' | 'domicilio' | 'ambos';
+  allowScheduling?: boolean;
   assignedProfessionals: string[];
   image: string;
   description?: string;

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Zap, ShieldCheck, ArrowRight, ArrowLeft, CheckCircle2, QrCode, Copy, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
-import { ordersService } from '../../services/api';
+import { appointmentsService, ordersService } from '../../services/api';
 import { storage } from '../../utils/storage';
 import { validateCoupon } from '../../utils/customerData';
 
@@ -124,6 +124,16 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
     return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
   };
 
+  const getCurrentUser = () => {
+    return storage.get<{ id?: string | number; name?: string; phone?: string } | null>('session', null);
+  };
+
+  const toScheduledAt = (date: string, time: string) => {
+    const safeDate = date || new Date().toISOString().split('T')[0];
+    const safeTime = time || '09:00';
+    return new Date(`${safeDate}T${safeTime}:00`).toISOString();
+  };
+
   const handleApplyCoupon = () => {
     const result = validateCoupon(couponCode, subtotal);
     if (!result.valid) {
@@ -147,15 +157,9 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
     setError(null);
   };
 
-  const handlePayment = async () => {
+  const processCheckout = async (paymentMethod: 'credit_card' | 'pix') => {
     try {
       setError(null);
-      
-      if (method === 'pix') {
-        setShowPixModal(true);
-        return;
-      }
-
       setIsProcessing(true);
 
       const customerId = getCurrentUserId();
@@ -169,13 +173,38 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
       const serviceIds = services
         .map((s) => Number(s.id))
         .filter((id) => Number.isFinite(id) && id > 0);
+      if (!serviceIds.length) {
+        setError('Nenhum serviço válido selecionado.');
+        return;
+      }
+
+      const currentUser = getCurrentUser();
+      const appointmentPayload = {
+        customer_id: customerId,
+        company_id: Number.isFinite(companyId) && companyId > 0 ? companyId : 1,
+        professional_id: Number(bookingDetails?.professional?.id) || null,
+        address_id: bookingDetails?.location === 'domicilio' ? Number(bookingDetails?.address?.id) || null : null,
+        client_name: currentUser?.name || bookingDetails?.professional?.name || 'Cliente',
+        client_phone: currentUser?.phone || null,
+        scheduled_at: toScheduledAt(bookingDetails?.date, bookingDetails?.time),
+        time: bookingDetails?.time || null,
+        service_location: bookingDetails?.location || 'presencial',
+        booking_mode: bookingDetails?.bookingMode || 'scheduled',
+        price: subtotal,
+        duration: services.reduce((sum, item) => sum + Number(item.duration || 0), 0),
+        services: serviceIds
+      };
+
+      const appointmentResponse = await appointmentsService.create(appointmentPayload);
+      const appointmentId = Number(appointmentResponse.data?.appointment?.id);
+
       const orderData = {
         customer_id: customerId,
         company_id: Number.isFinite(companyId) && companyId > 0 ? companyId : 1,
-        services: serviceIds,
+        appointment_id: Number.isFinite(appointmentId) ? appointmentId : null,
         total_price: subtotal,
         discount: discount,
-        payment_method: 'credit_card',
+        payment_method: paymentMethod,
         status: 'confirmed',
         notes: appliedCouponCode ? `Cupom aplicado: ${appliedCouponCode}` : undefined
       };
@@ -197,6 +226,14 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePayment = async () => {
+    if (method === 'pix') {
+      setShowPixModal(true);
+      return;
+    }
+    await processCheckout('credit_card');
   };
 
   return (
@@ -365,7 +402,10 @@ const Checkout: React.FC<CheckoutProps> = ({ onConfirm, onBack, services, bookin
 
       {showPixModal && (
         <PixModal 
-          onConfirm={onConfirm} 
+          onConfirm={async () => {
+            setShowPixModal(false);
+            await processCheckout('pix');
+          }} 
           onCancel={() => setShowPixModal(false)} 
           price={total} 
         />

@@ -81,6 +81,12 @@ const Register: React.FC<RegisterProps> = ({ onBack, onSuccess }) => {
     } catch (err: any) {
       console.error('Erro no cadastro:', err?.response || err);
       const backendMessage = err?.response?.data?.message;
+      const emailVerificationRequired = Boolean(err?.response?.data?.emailVerificationRequired);
+      if (emailVerificationRequired) {
+        setSuccess(backendMessage || 'Cadastro pendente de confirmacao. Verifique sua caixa de e-mail.');
+        setTimeout(() => onSuccess(email), 900);
+        return;
+      }
       const fallback = err?.message || 'Erro ao registrar usuario.';
       setError(backendMessage || fallback);
     } finally {

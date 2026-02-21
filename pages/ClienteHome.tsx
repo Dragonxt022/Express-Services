@@ -1,16 +1,18 @@
-
+﻿
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Star, MapPin, ChevronRight, Clock, ShieldCheck, 
   Zap, Heart, Scissors, Sparkles, Wind, User, Flower2, Dog, 
   ArrowRight, Flame, AlertCircle
 } from 'lucide-react';
-import { companiesService, flashOffersService, teamMembersService } from '../services/api';
+import { appointmentsService, companiesService, flashOffersService, ordersService, teamMembersService } from '../services/api';
+import { storage } from '../utils/storage';
 
 interface ClienteHomeProps {
   onSelectCompany?: (id: string) => void;
   onSelectCategory?: (category: string) => void;
   onSearchSubmit?: (term: string) => void;
+  onOpenAppointment?: (appointmentId: string) => void;
   userName?: string;
 }
 
@@ -23,47 +25,162 @@ const categories = [
   { id: 6, name: 'Pet', icon: Dog, color: 'bg-orange-50' },
 ];
 
-const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCategory, onSearchSubmit, userName = 'Gabriel' }) => {
-  const [countdown, setCountdown] = useState('45:00');
+const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCategory, onSearchSubmit, onOpenAppointment, userName = 'Gabriel' }) => {
+  const [countdown, setCountdown] = useState('00:00:00');
   const [searchTerm, setSearchTerm] = useState('');
   const [companies, setCompanies] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
   const [professionals, setProfessionals] = useState<any[]>([]);
+  const [nextAppointment, setNextAppointment] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasFavoriteProfessionals, setHasFavoriteProfessionals] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        const [m, s] = prev.split(':').map(Number);
-        if (s > 0) return `${m}:${(s - 1).toString().padStart(2, '0')}`;
-        if (m > 0) return `${m - 1}:59`;
-        return '00:00';
-      });
-    }, 1000);
+    if (!nextAppointment?.scheduled_at) {
+      setCountdown('00:00:00');
+      return undefined;
+    }
+
+    const compute = () => {
+      const target = new Date(nextAppointment.scheduled_at).getTime();
+      const diffSec = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      const days = Math.floor(diffSec / 86400);
+      const hours = Math.floor((diffSec % 86400) / 3600);
+      const mins = Math.floor((diffSec % 3600) / 60);
+      const secs = diffSec % 60;
+
+      if (days > 0) {
+        setCountdown(`${days}d ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      } else {
+        setCountdown(`${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+
+    compute();
+    const timer = setInterval(compute, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [nextAppointment]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Carregar empresas
-      const companiesResponse = await companiesService.getAll();
-      setCompanies(companiesResponse.data || []);
+      const session = storage.get<{ id?: string | number } | null>('session', null);
+      const customerId = Number(session?.id);
 
-      // Carregar ofertas relâmpago
-      const offersResponse = await flashOffersService.getAll();
-      setOffers(offersResponse.data || []);
+      const [companiesResult, offersResult, professionalsResult, appointmentsResult, ordersResult] = await Promise.allSettled([
+        companiesService.getAll(),
+        flashOffersService.getAll(),
+        teamMembersService.getAll(),
+        Number.isFinite(customerId) && customerId > 0
+          ? appointmentsService.getByCustomer(customerId)
+          : Promise.resolve({ data: { appointments: [] } } as any),
+        Number.isFinite(customerId) && customerId > 0
+          ? ordersService.getByCustomer(customerId)
+          : Promise.resolve({ data: { orders: [] } } as any)
+      ]);
 
-      // Carregar profissionais
-      const professionalsResponse = await teamMembersService.getAll();
-      setProfessionals(professionalsResponse.data?.slice(0, 5) || []);
+      if (companiesResult.status === 'fulfilled') {
+        const payload = companiesResult.value.data;
+        const companiesData =
+          payload?.companies ||
+          (Array.isArray(payload?.data) ? payload.data : null) ||
+          (Array.isArray(payload) ? payload : []);
+
+        const activeCompanies = companiesData.filter((company: any) => company.status === 'active');
+        setCompanies(activeCompanies);
+      } else {
+        console.error('Erro ao carregar empresas:', companiesResult.reason);
+      }
+
+      if (offersResult.status === 'fulfilled') {
+        const payload = offersResult.value.data;
+        const offersData =
+          payload?.offers ||
+          (Array.isArray(payload?.data) ? payload.data : null) ||
+          (Array.isArray(payload) ? payload : []);
+        setOffers(offersData);
+      } else {
+        console.error('Erro ao carregar ofertas:', offersResult.reason);
+      }
+
+      if (professionalsResult.status === 'fulfilled') {
+        const payload = professionalsResult.value.data;
+        const professionalsData =
+          payload?.teamMembers ||
+          (Array.isArray(payload?.data) ? payload.data : null) ||
+          (Array.isArray(payload) ? payload : []);
+        setProfessionals(professionalsData.slice(0, 5));
+      } else {
+        console.error('Erro ao carregar profissionais:', professionalsResult.reason);
+      }
+
+      if (appointmentsResult.status === 'fulfilled') {
+        const payload = appointmentsResult.value.data;
+        const appointmentsData =
+          payload?.appointments ||
+          (Array.isArray(payload?.data) ? payload.data : null) ||
+          (Array.isArray(payload) ? payload : []);
+
+        const now = Date.now();
+        const fromAppointments = appointmentsData
+          .filter((appointment: any) => ['pending', 'scheduled'].includes(String(appointment.status || '')))
+          .map((appointment: any) => {
+            const scheduledAt = appointment.scheduled_at
+              ? new Date(appointment.scheduled_at).getTime()
+              : NaN;
+            return {
+              ...appointment,
+              __scheduledAtTs: scheduledAt
+            };
+          })
+          .filter((appointment: any) => Number.isFinite(appointment.__scheduledAtTs) && appointment.__scheduledAtTs > (now - 5 * 60 * 1000));
+
+        let fromOrders: any[] = [];
+        if (ordersResult.status === 'fulfilled') {
+          const ordersPayload = ordersResult.value.data;
+          const ordersData =
+            ordersPayload?.orders ||
+            (Array.isArray(ordersPayload?.data) ? ordersPayload.data : null) ||
+            (Array.isArray(ordersPayload) ? ordersPayload : []);
+          fromOrders = (ordersData || [])
+            .filter((order: any) => ['pending', 'confirmed', 'in_progress'].includes(String(order.status || '')))
+            .map((order: any) => {
+              const scheduledAt = order.appointment_scheduled_at
+                ? new Date(order.appointment_scheduled_at).getTime()
+                : NaN;
+              return {
+                id: order.appointment_id || `order_${order.id}`,
+                company_name: order.company_name,
+                time: order.appointment_time,
+                scheduled_at: order.appointment_scheduled_at,
+                status: order.status,
+                __scheduledAtTs: scheduledAt
+              };
+            })
+            .filter((item: any) => Number.isFinite(item.__scheduledAtTs) && item.__scheduledAtTs > (now - 5 * 60 * 1000));
+        }
+
+        const upcoming = [...fromAppointments, ...fromOrders]
+          .sort((a: any, b: any) => a.__scheduledAtTs - b.__scheduledAtTs);
+
+        setNextAppointment(upcoming[0] || null);
+      } else {
+        console.error('Erro ao carregar próximo agendamento:', appointmentsResult.reason);
+        setNextAppointment(null);
+      }
+
+      const favoriteProfessionals =
+        storage.get<any[]>('favorite_professionals', []) ||
+        storage.get<any[]>('favorites_professionals', []) ||
+        [];
+      setHasFavoriteProfessionals(Array.isArray(favoriteProfessionals) && favoriteProfessionals.length > 0);
     } catch (err: any) {
       console.error('Erro ao carregar dados:', err);
       setError('Erro ao carregar dados. Tente novamente.');
@@ -92,7 +209,7 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-none">Olá, {userName}</h1>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-none">OlÃ¡, {userName}</h1>
             <p className="text-gray-400 font-bold uppercase tracking-widest text-[9px] mt-1.5">Sexta-feira, 20 de Fevereiro</p>
           </div>
           <div className="relative group">
@@ -111,7 +228,7 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="O que você precisa hoje?"
+            placeholder="O que vocÃª precisa hoje?"
             className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 shadow-lg shadow-gray-100/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E11D48] transition-all text-gray-800 font-semibold text-base relative z-10"
           />
         </div>
@@ -149,6 +266,7 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
       </section>
 
       {/* Flash Offers */}
+      {(loading || offers.length > 0) && (
       <section className="animate-in slide-in-from-right-8 duration-700">
         <div className="flex items-center justify-between mb-6 px-2">
           <div className="flex items-center gap-2">
@@ -189,19 +307,23 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-gray-400 text-sm text-center py-8">Nenhuma oferta disponível no momento</p>
-        )}
+        ) : null}
       </section>
+      )}
 
       {/* Next Appointment */}
-      <section className="relative overflow-hidden bg-white p-6 rounded-3xl shadow-xl shadow-gray-100 border border-gray-50 group transition-all hover:border-[#E11D48]/10">
+      {nextAppointment && (
+      <button
+        type="button"
+        onClick={() => onOpenAppointment?.(String(nextAppointment.id))}
+        className="relative overflow-hidden bg-white p-6 rounded-3xl shadow-xl shadow-gray-100 border border-gray-50 group transition-all hover:border-[#E11D48]/10 w-full text-left"
+      >
         <div className="absolute top-0 right-0 w-48 h-48 bg-[#E11D48]/5 blur-[80px] rounded-full -mr-20 -mt-20"></div>
         
         <div className="flex items-center justify-between mb-6 relative z-10">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
-            <h3 className="font-black text-lg text-gray-900 tracking-tight">Próximo Agendamento</h3>
+            <h3 className="font-black text-lg text-gray-900 tracking-tight">PrÃ³ximo Agendamento</h3>
           </div>
           <div className="flex items-center gap-2 bg-green-50 text-green-600 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border border-green-100 shadow-sm">
             <ShieldCheck size={12} strokeWidth={3} /> Pago
@@ -215,29 +337,37 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
           </div>
           
           <div className="flex-1 text-center sm:text-left">
-            <h4 className="font-black text-gray-900 text-xl tracking-tight mb-1">Barbearia do Zé</h4>
+            <h4 className="font-black text-gray-900 text-xl tracking-tight mb-1">{nextAppointment.company_name || nextAppointment.companyName || 'Empresa'}</h4>
             <div className="flex items-center justify-center sm:justify-start gap-2 text-gray-400">
                <Zap size={12} className="text-[#E11D48] fill-current" />
-               <span className="text-[10px] font-bold uppercase tracking-widest">Corte + Barba Premium</span>
+               <span className="text-[10px] font-bold uppercase tracking-widest">
+                {nextAppointment.services?.length
+                  ? nextAppointment.services.map((service: any) => service.name).join(', ')
+                  : (nextAppointment.serviceName || 'Servico agendado')}
+               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-4 border-t sm:border-t-0 sm:border-l border-gray-100 pt-6 sm:pt-0 sm:pl-6 w-full sm:w-auto justify-center">
             <div className="text-right hidden sm:block">
               <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.2em]">Chegada</p>
-              <p className="text-lg font-black text-gray-900">15:00</p>
+              <p className="text-lg font-black text-gray-900">
+                {nextAppointment.time || new Date(nextAppointment.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-gray-50 border-4 border-white shadow-lg overflow-hidden ring-2 ring-gray-50/50">
                <img src="https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=100&h=100&auto=format&fit=crop" className="w-full h-full object-cover" alt="Empresa" />
             </div>
           </div>
         </div>
-      </section>
+      </button>
+      )}
 
       {/* Favorite Professionals */}
+      {hasFavoriteProfessionals && (
       <section>
         <div className="flex items-center justify-between mb-6 px-2">
-          <h3 className="font-black text-lg text-gray-900 tracking-tight">Especialistas Disponíveis</h3>
+          <h3 className="font-black text-lg text-gray-900 tracking-tight">Especialistas DisponÃ­veis</h3>
           <button className="text-[#E11D48] text-[10px] font-black uppercase tracking-widest hover:underline">Ver Todos</button>
         </div>
         {loading ? (
@@ -265,9 +395,10 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
             ))}
           </div>
         ) : (
-          <p className="text-gray-400 text-sm text-center py-8">Nenhum profissional disponível</p>
+          <p className="text-gray-400 text-sm text-center py-8">Nenhum profissional disponÃ­vel</p>
         )}
       </section>
+      )}
 
       {/* Featured Companies */}
       <section>
@@ -287,16 +418,20 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
           </div>
         ) : companies.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {companies.map((company) => (
+            {companies.map((company) => {
+              const isOpen = Boolean(company.is_open);
+              return (
               <div 
                 key={company.id} 
                 onClick={() => onSelectCompany?.(company.id.toString())}
-                className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl hover:border-rose-100/50 hover:-translate-y-1 transition-all duration-500 cursor-pointer group relative overflow-hidden"
+                className={`bg-white p-5 rounded-3xl shadow-sm border transition-all duration-500 cursor-pointer group relative overflow-hidden ${
+                  isOpen ? 'border-gray-100 hover:shadow-xl hover:border-rose-100/50 hover:-translate-y-1' : 'border-gray-200 opacity-80'
+                }`}
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#E11D48]/5 blur-3xl rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="flex gap-4 items-center relative z-10">
                   <div className="relative">
-                    <img src={company.logo || `https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=200&h=200&auto=format&fit=crop`} className="w-16 h-16 rounded-2xl object-cover shadow-lg group-hover:scale-110 transition-transform duration-500" alt={company.name} />
+                    <img src={company.logo || `https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=200&h=200&auto=format&fit=crop`} className={`w-16 h-16 rounded-2xl object-cover shadow-lg transition-transform duration-500 ${isOpen ? 'group-hover:scale-110' : 'grayscale'}`} alt={company.name} />
                     <div className="absolute -top-2 -right-2 bg-white px-2 py-1 rounded-xl shadow-lg border border-gray-50 flex items-center gap-1">
                       <Star size={10} className="text-amber-500 fill-current" />
                       <span className="text-[10px] font-black text-gray-800">{company.rating || '4.5'}</span>
@@ -304,26 +439,27 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
                   </div>
                   
                   <div className="flex-1">
-                    <h4 className="font-black text-gray-900 text-lg tracking-tight group-hover:text-[#E11D48] transition-colors mb-1">{company.name}</h4>
+                    <h4 className={`font-black text-lg tracking-tight transition-colors mb-1 ${isOpen ? 'text-gray-900 group-hover:text-[#E11D48]' : 'text-gray-500'}`}>{company.name}</h4>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1 text-gray-400 text-[9px] font-black uppercase tracking-widest">
-                        <MapPin size={10} /> {company.city || 'Rondônia'}
+                        <MapPin size={10} /> {company.address_city || company.city || 'RondÃ´nia'}
                       </div>
-                      <div className="flex items-center gap-1 text-[#E11D48] text-[9px] font-black uppercase tracking-widest">
-                        <Clock size={10} /> Aberto
+                      <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${isOpen ? 'text-[#E11D48]' : 'text-gray-400'}`}>
+                        <Clock size={10} /> {isOpen ? 'Aberto' : 'Fechado'}
                       </div>
                     </div>
                   </div>
                   
-                  <button className="w-10 h-10 rounded-xl bg-gray-50 text-gray-300 flex items-center justify-center group-hover:bg-[#E11D48] group-hover:text-white transition-all shadow-inner group-hover:rotate-12">
+                  <button className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-inner ${isOpen ? 'bg-gray-50 text-gray-300 group-hover:bg-[#E11D48] group-hover:text-white group-hover:rotate-12' : 'bg-gray-100 text-gray-300'}`}>
                     <ChevronRight size={20} />
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <p className="text-gray-400 text-sm text-center py-8">Nenhuma empresa disponível no momento</p>
+          <p className="text-gray-400 text-sm text-center py-8">Nenhuma empresa disponÃ­vel no momento</p>
         )}
       </section>
     </div>
@@ -331,3 +467,8 @@ const ClienteHome: React.FC<ClienteHomeProps> = ({ onSelectCompany, onSelectCate
 };
 
 export default ClienteHome;
+
+
+
+
+

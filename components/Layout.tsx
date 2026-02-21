@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 // Added missing CreditCard icon import to fix the compilation error
 import { LayoutDashboard, Grid, Bell, LogOut, Search, Calendar, History, Heart, Settings, Building2, Scissors, CreditCard } from 'lucide-react';
 import { UserRole, User } from '../types';
-import { COLORS } from '../constants';
 import { storage } from '../utils/storage';
+import { onNotificationsUpdated } from '../utils/notifications';
+import BrandLogo from './BrandLogo';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,8 +24,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, activeView, s
       setUnreadCount(notifs.filter(n => !n.read).length);
     };
     checkNotifications();
+    const unsubscribe = onNotificationsUpdated(checkNotifications);
     const interval = setInterval(checkNotifications, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, []);
   
   const renderBottomItem = (label: string, icon: React.ReactNode, path: string, badgeCount?: number) => {
@@ -57,10 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, activeView, s
       <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('launcher')}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-sm shadow-sm" style={{ backgroundColor: COLORS.primary }}>
-              BE
-            </div>
-            <span className="font-bold text-gray-800 tracking-tight hidden sm:block">BelezaExpress</span>
+            <BrandLogo imageClassName="h-9 w-auto" />
           </div>
 
           <div className="flex items-center gap-2">

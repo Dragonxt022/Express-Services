@@ -81,6 +81,9 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
     if (!validateRequired(formData.logradouro)) newErrors.logradouro = 'Rua é obrigatória';
     if (!validateRequired(formData.numero)) newErrors.numero = 'Nº é obrigatório';
     if (!validateRequired(formData.cidade)) newErrors.cidade = 'Cidade é obrigatória';
+    if (Number(formData.royaltyPercent) < 0 || Number(formData.royaltyPercent) > 100) {
+      newErrors.royaltyPercent = 'Royalties deve estar entre 0 e 100';
+    }
     
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
@@ -107,12 +110,12 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
         address_neighborhood: formData.bairro,
         address_city: formData.cidade,
         address_state: formData.estado,
-        description: formData.razaoSocial
+        description: formData.razaoSocial,
+        royalty_percent: Number(formData.royaltyPercent)
       };
 
       if (companyId) {
         payload.status = formData.status;
-        payload.royalty_percent = formData.royaltyPercent;
         await companiesService.update(Number(companyId), payload);
         showFeedback('success', 'Dados da empresa atualizados!');
       } else {
@@ -181,6 +184,19 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
                 onChange={e => setFormData({...formData, cnpj: maskCNPJ(e.target.value)})}
                 className="w-full px-5 py-3 bg-gray-50 rounded-2xl mt-1 border-2 border-transparent focus:bg-white focus:ring-2 focus:ring-pink-500" 
               />
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-400 ml-2">Royalties (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                value={formData.royaltyPercent}
+                onChange={e => setFormData({...formData, royaltyPercent: Number(e.target.value)})}
+                className="w-full px-5 py-3 bg-gray-50 rounded-2xl mt-1 border-2 border-transparent focus:bg-white focus:ring-2 focus:ring-pink-500"
+              />
+              {errors.royaltyPercent && <p className="text-xs text-red-500 mt-1 ml-1">{errors.royaltyPercent}</p>}
             </div>
           </div>
         </div>
@@ -251,7 +267,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
                 onChange={e => setFormData({...formData, estado: e.target.value})}
                 className="w-full px-5 py-3 bg-gray-50 rounded-2xl mt-1 border-2 border-transparent focus:bg-white"
               >
-                <option value="RO" selected>Rondônia</option>
+                <option value="RO">Rondônia</option>
               </select>
             </div>
           </div>
@@ -297,3 +313,5 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ companyId, onBack }) => {
 };
 
 export default CompanyForm;
+
+

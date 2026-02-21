@@ -47,7 +47,7 @@ const Concierge: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-24 right-6 z-[100]">
+    <div className="fixed bottom-32 sm:bottom-24 right-4 sm:right-6 z-[100]">
       {!isOpen ? (
         <button 
           onClick={() => setIsOpen(true)}
